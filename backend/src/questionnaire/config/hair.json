@@ -1,0 +1,185 @@
+{
+  "id": "hair",
+  "title_en": "Hair & scalp",
+  "title_ar": "الشعر وفروة الرأس",
+  "questions": [
+    {
+      "key": "product_type",
+      "text_en": "Which type of product are you looking for?",
+      "text_ar": "ما نوع المنتج الذي تبحث عنه؟",
+      "type": "single",
+      "options": [
+        { "value": "shampoo", "label_en": "Shampoo", "label_ar": "شامبو" },
+        { "value": "conditioner", "label_en": "Conditioner / mask", "label_ar": "بلسم / ماسك" },
+        { "value": "scalp_treatment", "label_en": "Scalp treatment", "label_ar": "علاج فروة الرأس" },
+        { "value": "hair_loss", "label_en": "Hair-loss product", "label_ar": "منتج لتساقط الشعر" },
+        { "value": "styling", "label_en": "Styling / leave-in", "label_ar": "تصفيف / بدون شطف" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "scalp_type",
+      "text_en": "How would you describe your scalp?",
+      "text_ar": "كيف تصف فروة رأسك؟",
+      "type": "single",
+      "knowledge_question": true,
+      "options": [
+        { "value": "oily", "label_en": "Oily", "label_ar": "دهنية" },
+        { "value": "dry", "label_en": "Dry", "label_ar": "جافة" },
+        { "value": "flaky", "label_en": "Flaky / dandruff", "label_ar": "قشرة" },
+        { "value": "sensitive", "label_en": "Sensitive / itchy", "label_ar": "حساسة / حكة" },
+        { "value": "normal", "label_en": "Normal", "label_ar": "عادية" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "hair_pattern",
+      "text_en": "What is your hair pattern?",
+      "text_ar": "ما نمط شعرك؟",
+      "type": "single",
+      "options": [
+        { "value": "straight", "label_en": "Straight", "label_ar": "ناعم/مستقيم" },
+        { "value": "wavy", "label_en": "Wavy", "label_ar": "مموج" },
+        { "value": "curly", "label_en": "Curly", "label_ar": "مجعد" },
+        { "value": "coily", "label_en": "Coily", "label_ar": "شديد التجعد" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "hair_thickness",
+      "text_en": "How thick is your hair?",
+      "text_ar": "ما كثافة شعرك؟",
+      "type": "single",
+      "options": [
+        { "value": "fine", "label_en": "Fine", "label_ar": "خفيف" },
+        { "value": "medium", "label_en": "Medium", "label_ar": "متوسط" },
+        { "value": "thick", "label_en": "Thick", "label_ar": "كثيف" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "concern_primary",
+      "text_en": "What is your main concern?",
+      "text_ar": "ما هو همّك الأساسي؟",
+      "type": "single",
+      "options": [
+        { "value": "hair_loss", "label_en": "Hair loss / thinning", "label_ar": "تساقط الشعر" },
+        { "value": "dandruff", "label_en": "Dandruff", "label_ar": "القشرة" },
+        { "value": "dryness", "label_en": "Dryness / frizz", "label_ar": "الجفاف والتطاير" },
+        { "value": "damage", "label_en": "Damage / breakage", "label_ar": "التلف والتقصف" },
+        { "value": "oiliness", "label_en": "Oily roots", "label_ar": "الجذور الدهنية" },
+        { "value": "general", "label_en": "General care", "label_ar": "عناية عامة" }
+      ]
+    },
+    {
+      "key": "chemical_history",
+      "text_en": "Has your hair been chemically treated?",
+      "text_ar": "هل خضع شعرك لمعالجة كيميائية؟",
+      "type": "single",
+      "options": [
+        { "value": "coloured", "label_en": "Coloured", "label_ar": "مصبوغ" },
+        { "value": "bleached", "label_en": "Bleached / highlighted", "label_ar": "مبيّض / هاي لايت" },
+        { "value": "keratin", "label_en": "Keratin / straightening", "label_ar": "كيراتين / فرد" },
+        { "value": "none", "label_en": "No treatments", "label_ar": "بدون معالجات" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "wash_frequency",
+      "text_en": "How often do you wash your hair?",
+      "text_ar": "كم مرة تغسل شعرك؟",
+      "type": "single",
+      "options": [
+        { "value": "daily", "label_en": "Daily", "label_ar": "يومياً" },
+        { "value": "every_2_3", "label_en": "Every 2–3 days", "label_ar": "كل ٢-٣ أيام" },
+        { "value": "weekly", "label_en": "Weekly", "label_ar": "أسبوعياً" },
+        { "value": "less", "label_en": "Less often", "label_ar": "أقل من ذلك" }
+      ]
+    },
+    {
+      "key": "formula_preference",
+      "text_en": "Any formula preferences?",
+      "text_ar": "هل لديك تفضيلات في التركيبة؟",
+      "type": "multi",
+      "optional": true,
+      "knowledge_question": true,
+      "options": [
+        { "value": "sulfate_free", "label_en": "Sulfate-free", "label_ar": "خالٍ من السلفات" },
+        { "value": "silicone_free", "label_en": "Silicone-free", "label_ar": "خالٍ من السيليكون" },
+        { "value": "fragrance_free", "label_en": "Fragrance-free", "label_ar": "خالٍ من العطور" },
+        { "value": "none", "label_en": "No preference", "label_ar": "لا تفضيل" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "budget",
+      "text_en": "What budget works for you?",
+      "text_ar": "ما الميزانية المناسبة لك؟",
+      "type": "single",
+      "options": [
+        { "value": "low", "label_en": "Best value", "label_ar": "الأوفر" },
+        { "value": "mid", "label_en": "Mid-range", "label_ar": "متوسطة" },
+        { "value": "high", "label_en": "Premium", "label_ar": "فاخرة" },
+        { "value": "any", "label_en": "Show me anything suitable", "label_ar": "أرني أي خيار مناسب" }
+      ]
+    },
+
+    {
+      "key": "hair_loss_duration",
+      "text_en": "How long has the hair loss been going on?",
+      "text_ar": "منذ متى بدأ تساقط الشعر؟",
+      "type": "single",
+      "show_if": { "key": "concern_primary", "in": ["hair_loss"] },
+      "options": [
+        { "value": "sudden", "label_en": "It started suddenly", "label_ar": "بدأ فجأة" },
+        { "value": "recent", "label_en": "A few weeks", "label_ar": "منذ أسابيع قليلة" },
+        { "value": "gradual", "label_en": "Gradually over months or years", "label_ar": "تدريجياً خلال شهور أو سنوات" }
+      ],
+      "escalate": {
+        "values": ["sudden"],
+        "urgency": "pharmacist_review",
+        "reason": "Sudden hair loss should be medically evaluated rather than treated with cosmetic products."
+      }
+    },
+    {
+      "key": "hair_loss_symptoms",
+      "text_en": "Have you noticed any of these?",
+      "text_ar": "هل لاحظت أياً مما يلي؟",
+      "type": "multi",
+      "show_if": { "key": "concern_primary", "in": ["hair_loss"] },
+      "options": [
+        { "value": "bald_patches", "label_en": "Bald patches", "label_ar": "بقع خالية من الشعر" },
+        { "value": "scalp_pain", "label_en": "Scalp pain", "label_ar": "ألم في فروة الرأس" },
+        { "value": "redness_scaling", "label_en": "Redness or scaling", "label_ar": "احمرار أو تقشر" },
+        { "value": "scarring", "label_en": "Scarring", "label_ar": "ندبات" },
+        { "value": "none", "label_en": "None of these", "label_ar": "لا شيء مما سبق" }
+      ],
+      "escalate": {
+        "values": ["bald_patches", "scalp_pain", "redness_scaling", "scarring"],
+        "urgency": "pharmacist_review",
+        "reason": "Patchy or symptomatic hair loss needs medical evaluation before cosmetic products."
+      }
+    },
+    {
+      "key": "hair_loss_context",
+      "text_en": "Only if you're comfortable sharing — does any of this apply?",
+      "text_ar": "فقط إذا كنت مرتاحاً للمشاركة — هل ينطبق أي مما يلي؟",
+      "type": "single",
+      "optional": true,
+      "privacy_sensitive": true,
+      "show_if": { "key": "concern_primary", "in": ["hair_loss"] },
+      "options": [
+        { "value": "pregnancy_postpartum", "label_en": "Pregnancy or postpartum", "label_ar": "حمل أو ما بعد الولادة" },
+        { "value": "diagnosed_condition", "label_en": "A diagnosed condition", "label_ar": "حالة مشخّصة" },
+        { "value": "medication", "label_en": "Taking a medication", "label_ar": "أتناول دواءً" },
+        { "value": "none", "label_en": "None of these", "label_ar": "لا شيء مما سبق" },
+        { "value": "prefer_not_say", "label_en": "Prefer not to say", "label_ar": "أفضل عدم الإفصاح" }
+      ],
+      "escalate": {
+        "values": ["pregnancy_postpartum", "diagnosed_condition", "medication"],
+        "urgency": "pharmacist_review",
+        "reason": "Hair loss with a pregnancy, medical or medication context needs pharmacist guidance."
+      }
+    }
+  ]
+}

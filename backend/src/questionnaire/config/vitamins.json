@@ -1,0 +1,137 @@
+{
+  "id": "vitamins",
+  "title_en": "Vitamins & wellness",
+  "title_ar": "الفيتامينات والصحة",
+  "requires_pharmacist_verified_catalogue": true,
+  "notice_en": "For supplements I only recommend products whose label information a pharmacist has verified.",
+  "notice_ar": "بالنسبة للمكملات، أوصي فقط بمنتجات تم التحقق من معلومات ملصقها من قبل صيدلي.",
+  "questions": [
+    {
+      "key": "goal",
+      "text_en": "What is your main goal?",
+      "text_ar": "ما هدفك الأساسي؟",
+      "type": "single",
+      "options": [
+        { "value": "energy", "label_en": "Energy support", "label_ar": "دعم الطاقة" },
+        { "value": "immunity", "label_en": "Immune support", "label_ar": "دعم المناعة" },
+        { "value": "hair_skin_nails", "label_en": "Hair, skin & nails", "label_ar": "الشعر والبشرة والأظافر" },
+        { "value": "bone_joint", "label_en": "Bone & joint support", "label_ar": "دعم العظام والمفاصل" },
+        { "value": "digestion", "label_en": "Digestive support", "label_ar": "دعم الهضم" },
+        { "value": "general", "label_en": "General daily supplement", "label_ar": "مكمل يومي عام" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "who_for_detail",
+      "text_en": "Who is it for?",
+      "text_ar": "لمن هو؟",
+      "type": "single",
+      "options": [
+        { "value": "adult", "label_en": "An adult", "label_ar": "شخص بالغ" },
+        { "value": "teen", "label_en": "A teenager", "label_ar": "مراهق" },
+        { "value": "child", "label_en": "A child", "label_ar": "طفل" },
+        { "value": "older_adult", "label_en": "An older adult", "label_ar": "شخص كبير في السن" }
+      ],
+      "escalate": {
+        "values": ["child"],
+        "urgency": "pharmacist_review",
+        "reason": "Supplements for children require pharmacist-reviewed data before any personalised recommendation."
+      }
+    },
+    {
+      "key": "pregnancy_status",
+      "text_en": "Is the person pregnant or breastfeeding?",
+      "text_ar": "هل الشخص حامل أو مرضع؟",
+      "type": "single",
+      "privacy_sensitive": true,
+      "options": [
+        { "value": "pregnant", "label_en": "Pregnant", "label_ar": "حامل" },
+        { "value": "breastfeeding", "label_en": "Breastfeeding", "label_ar": "مرضع" },
+        { "value": "no", "label_en": "Neither", "label_ar": "لا هذا ولا ذاك" },
+        { "value": "prefer_not_say", "label_en": "Prefer not to say", "label_ar": "أفضل عدم الإفصاح" }
+      ],
+      "escalate": {
+        "values": ["pregnant", "breastfeeding"],
+        "urgency": "pharmacist_review",
+        "reason": "Supplement suitability during pregnancy or breastfeeding requires pharmacist guidance."
+      }
+    },
+    {
+      "key": "diagnosed_condition",
+      "text_en": "Any diagnosed health condition we should be careful about?",
+      "text_ar": "هل هناك حالة صحية مشخّصة يجب الانتباه لها؟",
+      "type": "single",
+      "privacy_sensitive": true,
+      "options": [
+        { "value": "yes", "label_en": "Yes", "label_ar": "نعم" },
+        { "value": "no", "label_en": "No", "label_ar": "لا" },
+        { "value": "prefer_not_say", "label_en": "Prefer not to say", "label_ar": "أفضل عدم الإفصاح" }
+      ],
+      "escalate": {
+        "values": ["yes"],
+        "urgency": "pharmacist_review",
+        "reason": "A diagnosed condition requires pharmacist-reviewed supplement guidance."
+      }
+    },
+    {
+      "key": "current_medicines",
+      "text_en": "Is the person taking any medicines or other supplements?",
+      "text_ar": "هل يتناول الشخص أي أدوية أو مكملات أخرى؟",
+      "type": "single",
+      "privacy_sensitive": true,
+      "options": [
+        { "value": "medicines", "label_en": "Prescribed medicines", "label_ar": "أدوية موصوفة" },
+        { "value": "supplements", "label_en": "Other supplements", "label_ar": "مكملات أخرى" },
+        { "value": "both", "label_en": "Both", "label_ar": "كلاهما" },
+        { "value": "none", "label_en": "Neither", "label_ar": "لا شيء" },
+        { "value": "prefer_not_say", "label_en": "Prefer not to say", "label_ar": "أفضل عدم الإفصاح" }
+      ],
+      "escalate": {
+        "values": ["medicines", "supplements", "both"],
+        "urgency": "pharmacist_review",
+        "reason": "Possible interaction between supplements and existing medicines or supplements — pharmacist review required."
+      }
+    },
+    {
+      "key": "preferred_form",
+      "text_en": "Which form do you prefer?",
+      "text_ar": "أي شكل تفضل؟",
+      "type": "single",
+      "options": [
+        { "value": "tablet", "label_en": "Tablet", "label_ar": "أقراص" },
+        { "value": "capsule", "label_en": "Capsule", "label_ar": "كبسولات" },
+        { "value": "gummy", "label_en": "Gummy", "label_ar": "حلوى مطاطية" },
+        { "value": "powder", "label_en": "Powder / sachet", "label_ar": "بودرة / أكياس" },
+        { "value": "liquid", "label_en": "Liquid", "label_ar": "سائل" },
+        { "value": "no_preference", "label_en": "No preference", "label_ar": "لا تفضيل" }
+      ]
+    },
+    {
+      "key": "dietary_preference",
+      "text_en": "Any dietary preferences?",
+      "text_ar": "هل لديك تفضيلات غذائية؟",
+      "type": "multi",
+      "optional": true,
+      "options": [
+        { "value": "vegan", "label_en": "Vegan", "label_ar": "نباتي صرف" },
+        { "value": "vegetarian", "label_en": "Vegetarian", "label_ar": "نباتي" },
+        { "value": "halal", "label_en": "Halal", "label_ar": "حلال" },
+        { "value": "gluten_free", "label_en": "Gluten-free", "label_ar": "خالٍ من الغلوتين" },
+        { "value": "sugar_free", "label_en": "Sugar-free", "label_ar": "خالٍ من السكر" },
+        { "value": "none", "label_en": "No preference", "label_ar": "لا تفضيل" }
+      ]
+    },
+    {
+      "key": "budget",
+      "text_en": "What budget works for you?",
+      "text_ar": "ما الميزانية المناسبة لك؟",
+      "type": "single",
+      "options": [
+        { "value": "low", "label_en": "Best value", "label_ar": "الأوفر" },
+        { "value": "mid", "label_en": "Mid-range", "label_ar": "متوسطة" },
+        { "value": "high", "label_en": "Premium", "label_ar": "فاخرة" },
+        { "value": "any", "label_en": "Show me anything suitable", "label_ar": "أرني أي خيار مناسب" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,267 @@
+{
+  "id": "face",
+  "title_en": "Face care",
+  "title_ar": "العناية بالوجه",
+  "questions": [
+    {
+      "key": "product_type",
+      "text_en": "Which type of product are you looking for?",
+      "text_ar": "ما نوع المنتج الذي تبحث عنه؟",
+      "type": "single",
+      "options": [
+        { "value": "cleanser", "label_en": "Cleanser", "label_ar": "غسول" },
+        { "value": "moisturizer", "label_en": "Moisturizer", "label_ar": "مرطب" },
+        { "value": "serum", "label_en": "Serum / treatment", "label_ar": "سيروم / علاج" },
+        { "value": "sunscreen", "label_en": "Sunscreen", "label_ar": "واقي شمس" },
+        { "value": "eye_care", "label_en": "Eye care", "label_ar": "العناية بالعين" },
+        { "value": "mask", "label_en": "Mask / exfoliant", "label_ar": "ماسك / مقشر" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "skin_type",
+      "text_en": "How would you describe your skin?",
+      "text_ar": "كيف تصف بشرتك؟",
+      "type": "single",
+      "knowledge_question": true,
+      "options": [
+        { "value": "oily", "label_en": "Oily", "label_ar": "دهنية" },
+        { "value": "dry", "label_en": "Dry", "label_ar": "جافة" },
+        { "value": "combination", "label_en": "Combination", "label_ar": "مختلطة" },
+        { "value": "normal", "label_en": "Normal", "label_ar": "عادية" },
+        { "value": "sensitive", "label_en": "Sensitive", "label_ar": "حساسة" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "concern_primary",
+      "text_en": "What is your main concern right now?",
+      "text_ar": "ما هو همّك الأساسي حالياً؟",
+      "type": "single",
+      "options": [
+        { "value": "acne", "label_en": "Acne / breakouts", "label_ar": "حب الشباب" },
+        { "value": "dryness", "label_en": "Dryness", "label_ar": "الجفاف" },
+        { "value": "pigmentation", "label_en": "Dark spots / uneven tone", "label_ar": "التصبغات" },
+        { "value": "ageing", "label_en": "Fine lines / firmness", "label_ar": "التجاعيد والترهل" },
+        { "value": "sensitivity", "label_en": "Redness / sensitivity", "label_ar": "الاحمرار والحساسية" },
+        { "value": "oiliness", "label_en": "Oiliness / shine", "label_ar": "الدهون واللمعان" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "concern_secondary",
+      "text_en": "Is there a second thing you'd like it to help with?",
+      "text_ar": "هل هناك أمر ثانٍ تود أن يساعدك فيه؟",
+      "type": "single",
+      "optional": true,
+      "options": [
+        { "value": "acne", "label_en": "Acne / breakouts", "label_ar": "حب الشباب" },
+        { "value": "dryness", "label_en": "Dryness", "label_ar": "الجفاف" },
+        { "value": "pigmentation", "label_en": "Dark spots", "label_ar": "التصبغات" },
+        { "value": "ageing", "label_en": "Fine lines", "label_ar": "التجاعيد" },
+        { "value": "pores", "label_en": "Enlarged pores", "label_ar": "المسام الواسعة" },
+        { "value": "none", "label_en": "Nothing else", "label_ar": "لا شيء آخر" }
+      ]
+    },
+    {
+      "key": "sensitivity_level",
+      "text_en": "How sensitive is your skin to new products?",
+      "text_ar": "ما مدى حساسية بشرتك تجاه المنتجات الجديدة؟",
+      "type": "single",
+      "options": [
+        { "value": "very", "label_en": "Very — it reacts easily", "label_ar": "عالية جداً — تتهيج بسهولة" },
+        { "value": "somewhat", "label_en": "Somewhat", "label_ar": "متوسطة" },
+        { "value": "not", "label_en": "Not sensitive", "label_ar": "غير حساسة" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "texture_preference",
+      "text_en": "Which texture do you prefer?",
+      "text_ar": "أي قوام تفضل؟",
+      "type": "single",
+      "optional": true,
+      "options": [
+        { "value": "gel", "label_en": "Light gel", "label_ar": "جل خفيف" },
+        { "value": "lotion", "label_en": "Lotion", "label_ar": "لوشن" },
+        { "value": "cream", "label_en": "Rich cream", "label_ar": "كريم غني" },
+        { "value": "oil", "label_en": "Oil / balm", "label_ar": "زيت / بلسم" },
+        { "value": "no_preference", "label_en": "No preference", "label_ar": "لا تفضيل" }
+      ]
+    },
+    {
+      "key": "avoid_ingredients",
+      "text_en": "Anything you'd like to avoid?",
+      "text_ar": "هل هناك ما تود تجنبه؟",
+      "type": "multi",
+      "knowledge_question": true,
+      "optional": true,
+      "options": [
+        { "value": "fragrance", "label_en": "Fragrance", "label_ar": "العطور" },
+        { "value": "alcohol", "label_en": "Alcohol", "label_ar": "الكحول" },
+        { "value": "retinol", "label_en": "Retinol", "label_ar": "الريتينول" },
+        { "value": "acids", "label_en": "Strong acids", "label_ar": "الأحماض القوية" },
+        { "value": "none", "label_en": "Nothing in particular", "label_ar": "لا شيء محدد" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "current_actives",
+      "text_en": "Are you already using any of these?",
+      "text_ar": "هل تستخدم حالياً أياً من هذه؟",
+      "type": "multi",
+      "knowledge_question": true,
+      "optional": true,
+      "options": [
+        { "value": "retinol", "label_en": "Retinol / retinoid", "label_ar": "ريتينول / ريتينويد" },
+        { "value": "vitamin_c", "label_en": "Vitamin C", "label_ar": "فيتامين سي" },
+        { "value": "acids", "label_en": "AHA / BHA", "label_ar": "أحماض AHA / BHA" },
+        { "value": "prescription", "label_en": "A prescribed treatment", "label_ar": "علاج موصوف من الطبيب" },
+        { "value": "none", "label_en": "None", "label_ar": "لا شيء" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ],
+      "escalate": {
+        "values": ["prescription"],
+        "urgency": "pharmacist_review",
+        "reason": "Customer is on a prescribed treatment — product compatibility needs pharmacist input."
+      }
+    },
+    {
+      "key": "budget",
+      "text_en": "What budget works for you?",
+      "text_ar": "ما الميزانية المناسبة لك؟",
+      "type": "single",
+      "options": [
+        { "value": "low", "label_en": "Best value", "label_ar": "الأوفر" },
+        { "value": "mid", "label_en": "Mid-range", "label_ar": "متوسطة" },
+        { "value": "high", "label_en": "Premium", "label_ar": "فاخرة" },
+        { "value": "any", "label_en": "Show me anything suitable", "label_ar": "أرني أي خيار مناسب" }
+      ]
+    },
+
+    {
+      "key": "cleanser_tightness",
+      "text_en": "Does your skin feel tight after washing?",
+      "text_ar": "هل تشعر بشد في بشرتك بعد الغسل؟",
+      "type": "single",
+      "show_if": { "key": "product_type", "in": ["cleanser"] },
+      "options": [
+        { "value": "yes", "label_en": "Yes, often", "label_ar": "نعم، غالباً" },
+        { "value": "sometimes", "label_en": "Sometimes", "label_ar": "أحياناً" },
+        { "value": "no", "label_en": "No", "label_ar": "لا" }
+      ]
+    },
+    {
+      "key": "cleanser_removal",
+      "text_en": "Do you need it to remove makeup or sunscreen?",
+      "text_ar": "هل تحتاجه لإزالة المكياج أو واقي الشمس؟",
+      "type": "single",
+      "show_if": { "key": "product_type", "in": ["cleanser"] },
+      "options": [
+        { "value": "makeup", "label_en": "Makeup", "label_ar": "المكياج" },
+        { "value": "sunscreen", "label_en": "Sunscreen", "label_ar": "واقي الشمس" },
+        { "value": "both", "label_en": "Both", "label_ar": "كلاهما" },
+        { "value": "neither", "label_en": "Neither", "label_ar": "لا هذا ولا ذاك" }
+      ]
+    },
+    {
+      "key": "cleanser_foam",
+      "text_en": "Do you prefer a foaming or non-foaming cleanser?",
+      "text_ar": "هل تفضل غسولاً رغوياً أم غير رغوي؟",
+      "type": "single",
+      "show_if": { "key": "product_type", "in": ["cleanser"] },
+      "options": [
+        { "value": "foaming", "label_en": "Foaming", "label_ar": "رغوي" },
+        { "value": "non_foaming", "label_en": "Non-foaming / cream", "label_ar": "غير رغوي / كريمي" },
+        { "value": "no_preference", "label_en": "No preference", "label_ar": "لا تفضيل" }
+      ]
+    },
+    {
+      "key": "cleanser_double",
+      "text_en": "Single cleanse or double cleanse?",
+      "text_ar": "غسلة واحدة أم غسلتان؟",
+      "type": "single",
+      "show_if": { "key": "product_type", "in": ["cleanser"] },
+      "options": [
+        { "value": "single", "label_en": "Single — keep it simple", "label_ar": "واحدة — أبسط" },
+        { "value": "double", "label_en": "Double cleanse", "label_ar": "غسلتان" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+
+    {
+      "key": "sunscreen_area",
+      "text_en": "Is the sunscreen for your face only, or face and body?",
+      "text_ar": "هل واقي الشمس للوجه فقط أم للوجه والجسم؟",
+      "type": "single",
+      "show_if": { "key": "product_type", "in": ["sunscreen"] },
+      "options": [
+        { "value": "face", "label_en": "Face only", "label_ar": "الوجه فقط" },
+        { "value": "face_body", "label_en": "Face and body", "label_ar": "الوجه والجسم" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "sunscreen_tint",
+      "text_en": "Would you like a tinted sunscreen?",
+      "text_ar": "هل تفضل واقي شمس ملوّن؟",
+      "type": "single",
+      "show_if": { "key": "product_type", "in": ["sunscreen"] },
+      "options": [
+        { "value": "tinted", "label_en": "Yes, tinted", "label_ar": "نعم، ملوّن" },
+        { "value": "untinted", "label_en": "No, untinted", "label_ar": "لا، بدون لون" },
+        { "value": "no_preference", "label_en": "No preference", "label_ar": "لا تفضيل" }
+      ]
+    },
+    {
+      "key": "sunscreen_finish",
+      "text_en": "Which finish do you prefer?",
+      "text_ar": "أي لمسة نهائية تفضل؟",
+      "type": "single",
+      "show_if": { "key": "product_type", "in": ["sunscreen"] },
+      "options": [
+        { "value": "matte", "label_en": "Matte", "label_ar": "مطفي" },
+        { "value": "dewy", "label_en": "Dewy / glowy", "label_ar": "لامع" },
+        { "value": "natural", "label_en": "Natural", "label_ar": "طبيعي" },
+        { "value": "no_preference", "label_en": "No preference", "label_ar": "لا تفضيل" }
+      ]
+    },
+    {
+      "key": "sunscreen_water_resistant",
+      "text_en": "Do you need it to be water resistant?",
+      "text_ar": "هل تحتاجه مقاوماً للماء؟",
+      "type": "single",
+      "show_if": { "key": "product_type", "in": ["sunscreen"] },
+      "options": [
+        { "value": "yes", "label_en": "Yes — swimming or sport", "label_ar": "نعم — سباحة أو رياضة" },
+        { "value": "no", "label_en": "No — everyday use", "label_ar": "لا — استخدام يومي" },
+        { "value": "no_preference", "label_en": "No preference", "label_ar": "لا تفضيل" }
+      ]
+    },
+    {
+      "key": "sunscreen_eye_sting",
+      "text_en": "Do sunscreens usually sting your eyes?",
+      "text_ar": "هل تسبب واقيات الشمس عادةً حرقة في عينيك؟",
+      "type": "single",
+      "show_if": { "key": "product_type", "in": ["sunscreen"] },
+      "options": [
+        { "value": "yes", "label_en": "Yes", "label_ar": "نعم" },
+        { "value": "no", "label_en": "No", "label_ar": "لا" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "sunscreen_concern",
+      "text_en": "Are you also managing acne or pigmentation?",
+      "text_ar": "هل تعاني أيضاً من حب الشباب أو التصبغات؟",
+      "type": "single",
+      "show_if": { "key": "product_type", "in": ["sunscreen"] },
+      "options": [
+        { "value": "acne", "label_en": "Acne-prone", "label_ar": "بشرة معرضة لحب الشباب" },
+        { "value": "pigmentation", "label_en": "Pigmentation", "label_ar": "تصبغات" },
+        { "value": "both", "label_en": "Both", "label_ar": "كلاهما" },
+        { "value": "neither", "label_en": "Neither", "label_ar": "لا هذا ولا ذاك" }
+      ]
+    }
+  ]
+}

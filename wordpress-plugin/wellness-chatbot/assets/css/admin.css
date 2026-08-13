@@ -1,0 +1,299 @@
+/**
+ * Wellness Chatbot admin styles.
+ * Colours come from the brand ramp injected as CSS variables (WWC_Brand).
+ */
+
+.wwc-admin {
+	--wwc-border: #dcdcde;
+	max-width: 1200px;
+}
+
+/* --- Summary cards --------------------------------------------------------- */
+.wwc-cards {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin: 16px 0 24px;
+}
+
+.wwc-card {
+	background: #fff;
+	border: 1px solid var(--wwc-border);
+	border-top: 3px solid var(--wwc-primary);
+	border-radius: 6px;
+	padding: 14px 18px;
+	min-width: 150px;
+	flex: 0 1 auto;
+}
+
+.wwc-card-value {
+	display: block;
+	font-size: 26px;
+	font-weight: 600;
+	line-height: 1.2;
+	color: var(--wwc-primary-text);
+}
+
+.wwc-card-label {
+	display: block;
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: #646970;
+	margin-top: 4px;
+}
+
+.wwc-cards-kpi .wwc-card {
+	flex: 1 1 180px;
+}
+
+/* --- Review queue ---------------------------------------------------------- */
+.wwc-review-card {
+	background: #fff;
+	border: 1px solid var(--wwc-border);
+	border-radius: 6px;
+	padding: 18px;
+	margin-bottom: 20px;
+}
+
+.wwc-review-card.wwc-low-confidence {
+	border-left: 4px solid #d63638;
+}
+
+.wwc-review-head {
+	display: flex;
+	gap: 14px;
+	align-items: flex-start;
+	margin-bottom: 12px;
+}
+
+.wwc-review-head h2 {
+	margin: 0 0 4px;
+	font-size: 16px;
+}
+
+.wwc-thumb {
+	width: 60px;
+	height: 60px;
+	object-fit: cover;
+	border-radius: 4px;
+	border: 1px solid var(--wwc-border);
+}
+
+.wwc-edit-link {
+	font-size: 12px;
+	font-weight: 400;
+}
+
+.wwc-meta {
+	color: #646970;
+	font-size: 12px;
+	margin: 0;
+}
+
+.wwc-fields {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 10px 0;
+}
+
+.wwc-fields th,
+.wwc-fields td {
+	border: 1px solid var(--wwc-border);
+	padding: 8px;
+	text-align: start;
+	vertical-align: top;
+	font-size: 13px;
+}
+
+.wwc-fields thead th {
+	background: var(--wwc-50);
+	color: var(--wwc-primary-text);
+}
+
+.wwc-fields th[scope="row"] {
+	width: 170px;
+	font-weight: 600;
+}
+
+.wwc-current {
+	color: #50575e;
+	max-width: 260px;
+	word-break: break-word;
+}
+
+.wwc-review-actions {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	margin-top: 10px;
+}
+
+.wwc-relabel-form {
+	margin-top: 8px;
+}
+
+/* --- Flags ----------------------------------------------------------------- */
+.wwc-flag {
+	display: inline-block;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	padding: 2px 8px;
+	border-radius: 10px;
+}
+
+.wwc-flag-ok {
+	background: #edfaef;
+	color: #007017;
+}
+
+.wwc-flag-warn {
+	background: #fcf3d8;
+	color: #8a6100;
+}
+
+.wwc-flag-danger {
+	background: #fcebeb;
+	color: #b32d2e;
+}
+
+.wwc-flag-rx {
+	background: var(--wwc-100);
+	color: var(--wwc-primary-text);
+	padding: 6px 10px;
+	border-radius: 4px;
+	margin: 6px 0 0;
+	font-size: 12px;
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+/* --- Knowledge base -------------------------------------------------------- */
+.wwc-kb-entry {
+	background: #fff;
+	border: 1px solid var(--wwc-border);
+	border-inline-start: 4px solid #dba617;
+	border-radius: 6px;
+	padding: 16px;
+	margin-bottom: 16px;
+}
+
+.wwc-kb-entry.wwc-approved {
+	border-inline-start-color: #00a32a;
+}
+
+.wwc-kb-entry h3 {
+	margin-top: 0;
+}
+
+.wwc-bilingual {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+}
+
+@media (max-width: 782px) {
+	.wwc-bilingual {
+		grid-template-columns: 1fr;
+	}
+}
+
+.wwc-inline-form {
+	display: inline-block;
+	margin-top: 8px;
+}
+
+/* --- Escalations ----------------------------------------------------------- */
+.wwc-escalation {
+	background: #fff;
+	border: 1px solid var(--wwc-border);
+	border-inline-start: 4px solid #dba617;
+	border-radius: 6px;
+	padding: 16px;
+	margin-bottom: 16px;
+}
+
+.wwc-escalation.wwc-emergency {
+	border-inline-start-color: #d63638;
+	background: #fffafa;
+}
+
+.wwc-escalation h2 {
+	margin: 0 0 6px;
+	font-size: 15px;
+}
+
+.wwc-transcript {
+	background: #f6f7f7;
+	border-radius: 4px;
+	padding: 10px 14px;
+	margin-top: 8px;
+	max-height: 320px;
+	overflow-y: auto;
+}
+
+.wwc-turn {
+	margin: 0 0 8px;
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.wwc-turn-assistant {
+	color: var(--wwc-primary-text);
+}
+
+.wwc-resolve-form {
+	margin-top: 10px;
+}
+
+.wwc-resolved {
+	color: #007017;
+	font-size: 13px;
+}
+
+/* --- Checklist ------------------------------------------------------------- */
+.wwc-checklist,
+.wwc-list {
+	margin: 8px 0 16px;
+	padding: 0;
+	list-style: none;
+}
+
+.wwc-checklist li {
+	padding-inline-start: 26px;
+	position: relative;
+	margin-bottom: 6px;
+}
+
+.wwc-checklist li::before {
+	position: absolute;
+	inset-inline-start: 0;
+	font-weight: 700;
+}
+
+.wwc-checklist .wwc-done::before {
+	content: "\2713";
+	color: #00a32a;
+}
+
+.wwc-checklist .wwc-todo::before {
+	content: "\2022";
+	color: #d63638;
+}
+
+.wwc-list li {
+	margin-bottom: 4px;
+}
+
+.wwc-pagination {
+	margin: 16px 0;
+}
+
+.wwc-detail {
+	font-size: 11px;
+	word-break: break-all;
+	display: inline-block;
+	max-width: 420px;
+}

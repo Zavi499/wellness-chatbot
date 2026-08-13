@@ -1,0 +1,605 @@
+/**
+ * Wellness World chat widget.
+ *
+ * Brand colours arrive as CSS variables from WWC_Brand (primary #9322AA), so
+ * this file never hardcodes the palette. Logical properties throughout, so the
+ * Arabic RTL layout mirrors without a second stylesheet.
+ */
+
+.wwc-widget-root {
+	--wwc-radius: 14px;
+	--wwc-text: #1d2327;
+	--wwc-muted: #646970;
+	--wwc-line: #e2e4e7;
+	--wwc-bg: #ffffff;
+	font-family: inherit;
+	color: var(--wwc-text);
+	line-height: 1.5;
+	box-sizing: border-box;
+}
+
+.wwc-widget-root *,
+.wwc-widget-root *::before,
+.wwc-widget-root *::after {
+	box-sizing: inherit;
+}
+
+/* --- Launcher -------------------------------------------------------------- */
+.wwc-launcher {
+	position: fixed;
+	inset-block-end: 20px;
+	inset-inline-end: 20px;
+	z-index: 99998;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 12px 20px;
+	border: 0;
+	border-radius: 999px;
+	background: var(--wwc-primary);
+	color: #fff;
+	font-size: 15px;
+	font-weight: 600;
+	cursor: pointer;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+	/* Large tap target for mobile (spec §9.3). */
+	min-height: 48px;
+}
+
+.wwc-launcher:hover,
+.wwc-launcher:focus-visible {
+	background: var(--wwc-primary-hover);
+}
+
+.wwc-launcher:focus-visible,
+.wwc-widget-root :focus-visible {
+	outline: 3px solid var(--wwc-400);
+	outline-offset: 2px;
+}
+
+.wwc-launcher-icon {
+	font-size: 18px;
+	line-height: 1;
+}
+
+@media (max-width: 480px) {
+	.wwc-launcher-text {
+		display: none;
+	}
+
+	.wwc-launcher {
+		padding: 14px;
+	}
+}
+
+/* --- Panel ----------------------------------------------------------------- */
+.wwc-panel {
+	position: fixed;
+	inset-block-end: 84px;
+	inset-inline-end: 20px;
+	z-index: 99999;
+	display: flex;
+	flex-direction: column;
+	width: min(400px, calc(100vw - 32px));
+	height: min(620px, calc(100vh - 120px));
+	background: var(--wwc-bg);
+	border: 1px solid var(--wwc-line);
+	border-radius: var(--wwc-radius);
+	box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
+	overflow: hidden;
+}
+
+/* Inline placement via the shortcode sits in the page flow instead. */
+.wwc-widget-root[data-mode="inline"] .wwc-panel {
+	position: static;
+	width: 100%;
+	height: 560px;
+	box-shadow: none;
+}
+
+@media (max-width: 480px) {
+	.wwc-widget-root[data-mode="launcher"] .wwc-panel {
+		inset: 0;
+		width: 100vw;
+		height: 100dvh;
+		border-radius: 0;
+		border: 0;
+	}
+}
+
+.wwc-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 14px 16px;
+	background: var(--wwc-primary);
+	color: #fff;
+}
+
+.wwc-title {
+	margin: 0;
+	font-size: 15px;
+	font-weight: 600;
+	color: #fff;
+}
+
+.wwc-icon-btn {
+	background: transparent;
+	border: 0;
+	color: inherit;
+	font-size: 22px;
+	line-height: 1;
+	cursor: pointer;
+	padding: 4px 8px;
+	border-radius: 6px;
+	min-width: 34px;
+	min-height: 34px;
+}
+
+.wwc-icon-btn:hover {
+	background: rgba(255, 255, 255, 0.18);
+}
+
+/* --- Progress -------------------------------------------------------------- */
+.wwc-progress {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 16px;
+	border-block-end: 1px solid var(--wwc-line);
+	background: var(--wwc-surface);
+	font-size: 12px;
+	color: var(--wwc-primary-text);
+}
+
+.wwc-progress-label {
+	white-space: nowrap;
+	font-weight: 600;
+}
+
+.wwc-progress-bar {
+	flex: 1;
+	height: 6px;
+	background: var(--wwc-100);
+	border-radius: 999px;
+	overflow: hidden;
+}
+
+.wwc-progress-fill {
+	display: block;
+	height: 100%;
+	background: var(--wwc-primary);
+	transition: width 0.25s ease;
+}
+
+/* --- Messages -------------------------------------------------------------- */
+.wwc-messages {
+	flex: 1;
+	overflow-y: auto;
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.wwc-msg {
+	max-width: 88%;
+	padding: 10px 14px;
+	border-radius: var(--wwc-radius);
+	font-size: 14px;
+	word-wrap: break-word;
+}
+
+.wwc-msg p {
+	margin: 0 0 8px;
+}
+
+.wwc-msg p:last-child {
+	margin-bottom: 0;
+}
+
+.wwc-msg-bot {
+	align-self: flex-start;
+	background: var(--wwc-surface);
+	color: var(--wwc-text);
+	border-start-start-radius: 4px;
+}
+
+.wwc-msg-user {
+	align-self: flex-end;
+	background: var(--wwc-primary);
+	color: #fff;
+	border-end-end-radius: 4px;
+}
+
+.wwc-msg-system {
+	align-self: center;
+	background: #fcebeb;
+	color: #b32d2e;
+	font-size: 13px;
+	text-align: center;
+	max-width: 100%;
+}
+
+.wwc-thinking {
+	display: inline-flex;
+	gap: 4px;
+	align-items: center;
+	padding: 14px;
+}
+
+.wwc-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--wwc-400);
+	animation: wwc-bounce 1.2s infinite ease-in-out;
+}
+
+.wwc-dot:nth-child(2) {
+	animation-delay: 0.15s;
+}
+
+.wwc-dot:nth-child(3) {
+	animation-delay: 0.3s;
+}
+
+@keyframes wwc-bounce {
+	0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+	30% { transform: translateY(-4px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wwc-dot,
+	.wwc-progress-fill {
+		animation: none;
+		transition: none;
+	}
+}
+
+.wwc-privacy {
+	align-self: flex-start;
+	font-size: 12px;
+	color: var(--wwc-muted);
+}
+
+.wwc-privacy summary {
+	cursor: pointer;
+}
+
+/* --- Quick replies --------------------------------------------------------- */
+.wwc-quick-replies {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	padding: 0 16px 8px;
+}
+
+.wwc-quick-replies:empty {
+	padding: 0;
+}
+
+.wwc-chip {
+	border: 1px solid var(--wwc-300);
+	background: #fff;
+	color: var(--wwc-primary-text);
+	border-radius: 999px;
+	padding: 9px 16px;
+	font-size: 13px;
+	cursor: pointer;
+	/* Comfortable tap target on mobile. */
+	min-height: 40px;
+}
+
+.wwc-chip:hover,
+.wwc-chip:focus-visible {
+	background: var(--wwc-50);
+	border-color: var(--wwc-primary);
+}
+
+/* --- Composer -------------------------------------------------------------- */
+.wwc-composer {
+	display: flex;
+	gap: 8px;
+	align-items: flex-end;
+	padding: 12px 16px;
+	border-block-start: 1px solid var(--wwc-line);
+	background: #fff;
+}
+
+.wwc-input {
+	flex: 1;
+	resize: none;
+	border: 1px solid var(--wwc-line);
+	border-radius: 10px;
+	padding: 10px 12px;
+	font: inherit;
+	font-size: 14px;
+	max-height: 120px;
+	color: var(--wwc-text);
+	background: #fff;
+}
+
+.wwc-input:focus-visible {
+	border-color: var(--wwc-primary);
+}
+
+.wwc-input:disabled {
+	background: #f6f7f7;
+}
+
+/* --- Buttons --------------------------------------------------------------- */
+.wwc-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	font-size: 13px;
+	font-weight: 600;
+	padding: 10px 14px;
+	cursor: pointer;
+	border: 1px solid transparent;
+	text-decoration: none;
+	min-height: 40px;
+}
+
+.wwc-btn-primary {
+	background: var(--wwc-primary);
+	color: #fff;
+}
+
+.wwc-btn-primary:hover:not(:disabled) {
+	background: var(--wwc-primary-hover);
+	color: #fff;
+}
+
+.wwc-btn-ghost {
+	background: #fff;
+	color: var(--wwc-primary-text);
+	border-color: var(--wwc-300);
+}
+
+.wwc-btn-ghost:hover {
+	background: var(--wwc-50);
+	color: var(--wwc-primary-text);
+}
+
+.wwc-btn-link {
+	background: none;
+	border: 0;
+	color: var(--wwc-primary-text);
+	text-decoration: underline;
+	padding: 8px 6px;
+	font-weight: 500;
+}
+
+.wwc-btn:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+/* --- Recommendation cards -------------------------------------------------- */
+.wwc-recommendations {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.wwc-card {
+	border: 1px solid var(--wwc-line);
+	border-radius: var(--wwc-radius);
+	padding: 12px;
+	background: #fff;
+}
+
+.wwc-card-label {
+	display: inline-block;
+	background: var(--wwc-100);
+	color: var(--wwc-primary-text);
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	padding: 3px 9px;
+	border-radius: 999px;
+	margin-bottom: 8px;
+}
+
+.wwc-card-head {
+	display: flex;
+	gap: 12px;
+	align-items: flex-start;
+}
+
+.wwc-card-image {
+	width: 56px;
+	height: 56px;
+	object-fit: cover;
+	border-radius: 8px;
+	border: 1px solid var(--wwc-line);
+	flex-shrink: 0;
+}
+
+.wwc-card-name {
+	margin: 0 0 2px;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.wwc-card-meta {
+	margin: 0;
+	font-size: 13px;
+	color: var(--wwc-muted);
+}
+
+.wwc-stock {
+	display: inline-block;
+	font-size: 11px;
+	font-weight: 600;
+	padding: 2px 8px;
+	border-radius: 999px;
+	margin-top: 4px;
+}
+
+.wwc-stock-in {
+	background: #edfaef;
+	color: #007017;
+}
+
+.wwc-stock-out {
+	background: #fcebeb;
+	color: #b32d2e;
+}
+
+.wwc-card-bestfor {
+	margin: 10px 0 6px;
+	font-size: 13px;
+}
+
+.wwc-why summary {
+	cursor: pointer;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--wwc-primary-text);
+	padding: 4px 0;
+}
+
+.wwc-why ul {
+	margin: 6px 0;
+	padding-inline-start: 20px;
+	font-size: 13px;
+}
+
+.wwc-card-know,
+.wwc-card-how {
+	margin: 6px 0 0;
+	font-size: 13px;
+	color: var(--wwc-muted);
+}
+
+.wwc-card-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+.wwc-disclaimer,
+.wwc-shortfall {
+	font-size: 12px;
+	color: var(--wwc-muted);
+	margin: 4px 0 0;
+}
+
+/* --- Compare drawer -------------------------------------------------------- */
+.wwc-drawer {
+	position: absolute;
+	inset: 0;
+	background: #fff;
+	display: flex;
+	flex-direction: column;
+	z-index: 2;
+}
+
+.wwc-drawer-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 14px 16px;
+	background: var(--wwc-primary);
+	color: #fff;
+}
+
+.wwc-drawer-head h2 {
+	margin: 0;
+	font-size: 15px;
+	color: #fff;
+}
+
+.wwc-drawer-body {
+	flex: 1;
+	overflow: auto;
+	padding: 12px;
+}
+
+.wwc-compare {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+
+.wwc-compare th,
+.wwc-compare td {
+	border: 1px solid var(--wwc-line);
+	padding: 8px;
+	text-align: start;
+	vertical-align: top;
+}
+
+.wwc-compare thead th {
+	background: var(--wwc-surface);
+	color: var(--wwc-primary-text);
+	position: sticky;
+	top: 0;
+}
+
+/* --- Handoff & feedback ---------------------------------------------------- */
+.wwc-handoff {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+	padding: 12px;
+	background: var(--wwc-surface);
+	border-radius: var(--wwc-radius);
+}
+
+.wwc-handoff-note {
+	margin: 0;
+	font-size: 12px;
+	color: var(--wwc-muted);
+	flex-basis: 100%;
+}
+
+.wwc-feedback {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 8px;
+	flex-wrap: wrap;
+}
+
+.wwc-feedback-label {
+	font-size: 12px;
+	color: var(--wwc-muted);
+}
+
+.wwc-feedback .wwc-icon-btn {
+	font-size: 15px;
+	color: var(--wwc-muted);
+	min-width: 32px;
+	min-height: 32px;
+}
+
+.wwc-feedback .wwc-icon-btn:hover {
+	background: var(--wwc-100);
+}
+
+.wwc-feedback-input {
+	flex: 1;
+	min-width: 140px;
+	border: 1px solid var(--wwc-line);
+	border-radius: 6px;
+	padding: 6px 8px;
+	font-size: 12px;
+}
+
+/* --- High contrast --------------------------------------------------------- */
+@media (forced-colors: active) {
+	.wwc-panel,
+	.wwc-card,
+	.wwc-chip {
+		border: 1px solid CanvasText;
+	}
+}

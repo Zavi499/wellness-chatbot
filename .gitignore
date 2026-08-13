@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+
+# Runtime data: products, sessions, embeddings, KB, escalations, analytics.
+# Back this up in production — it holds verification decisions that cannot be
+# regenerated from WooCommerce.
+backend/data/
+
+*.log
+.DS_Store
+Thumbs.db

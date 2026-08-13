@@ -1,0 +1,123 @@
+{
+  "id": "body",
+  "title_en": "Body care",
+  "title_ar": "العناية بالجسم",
+  "questions": [
+    {
+      "key": "product_type",
+      "text_en": "Which type of product are you looking for?",
+      "text_ar": "ما نوع المنتج الذي تبحث عنه؟",
+      "type": "single",
+      "options": [
+        { "value": "wash", "label_en": "Body wash / shower gel", "label_ar": "غسول الجسم" },
+        { "value": "moisturizer", "label_en": "Body moisturizer", "label_ar": "مرطب الجسم" },
+        { "value": "deodorant", "label_en": "Deodorant", "label_ar": "مزيل العرق" },
+        { "value": "hand_foot", "label_en": "Hand or foot care", "label_ar": "العناية باليدين والقدمين" },
+        { "value": "treatment", "label_en": "Targeted treatment", "label_ar": "علاج موضعي" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "concern_primary",
+      "text_en": "What is your main concern?",
+      "text_ar": "ما هو همّك الأساسي؟",
+      "type": "single",
+      "options": [
+        { "value": "dryness", "label_en": "Dryness / rough skin", "label_ar": "الجفاف والخشونة" },
+        { "value": "body_acne", "label_en": "Body acne", "label_ar": "حب الشباب في الجسم" },
+        { "value": "pigmentation", "label_en": "Dark areas", "label_ar": "المناطق الداكنة" },
+        { "value": "itching", "label_en": "Itching", "label_ar": "الحكة" },
+        { "value": "odour", "label_en": "Odour / sweating", "label_ar": "الرائحة والتعرق" },
+        { "value": "general", "label_en": "General care", "label_ar": "عناية عامة" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "area_of_use",
+      "text_en": "Which area is it for?",
+      "text_ar": "لأي منطقة تريده؟",
+      "type": "single",
+      "options": [
+        { "value": "whole_body", "label_en": "Whole body", "label_ar": "الجسم كله" },
+        { "value": "hands_feet", "label_en": "Hands or feet", "label_ar": "اليدين أو القدمين" },
+        { "value": "underarms", "label_en": "Underarms", "label_ar": "تحت الإبط" },
+        { "value": "back_chest", "label_en": "Back or chest", "label_ar": "الظهر أو الصدر" },
+        { "value": "intimate", "label_en": "Intimate area", "label_ar": "المنطقة الحساسة" }
+      ],
+      "escalate": {
+        "values": ["intimate"],
+        "urgency": "pharmacist_review",
+        "reason": "Intimate-area care needs professional assessment rather than an automated recommendation."
+      }
+    },
+    {
+      "key": "skin_condition",
+      "text_en": "Is the skin in that area currently…",
+      "text_ar": "هل جلد تلك المنطقة حالياً…",
+      "type": "single",
+      "options": [
+        { "value": "intact", "label_en": "Healthy and intact", "label_ar": "سليم" },
+        { "value": "dry_flaky", "label_en": "Dry or flaky", "label_ar": "جاف أو متقشر" },
+        { "value": "severe_itching", "label_en": "Severely itchy", "label_ar": "حكة شديدة" },
+        { "value": "unexplained_rash", "label_en": "An unexplained rash", "label_ar": "طفح جلدي غير مفسر" },
+        { "value": "broken_skin", "label_en": "Broken or bleeding", "label_ar": "متشقق أو ينزف" },
+        { "value": "infection_signs", "label_en": "Warm, swollen or oozing", "label_ar": "ساخن أو منتفخ أو يفرز سوائل" }
+      ],
+      "escalate": {
+        "values": ["severe_itching", "unexplained_rash", "broken_skin", "infection_signs"],
+        "urgency": "pharmacist_review",
+        "reason": "Broken skin, unexplained rash, severe itching or possible infection needs professional assessment before any product recommendation."
+      }
+    },
+    {
+      "key": "sensitivity_level",
+      "text_en": "How sensitive is your skin?",
+      "text_ar": "ما مدى حساسية بشرتك؟",
+      "type": "single",
+      "options": [
+        { "value": "very", "label_en": "Very sensitive", "label_ar": "حساسة جداً" },
+        { "value": "somewhat", "label_en": "Somewhat", "label_ar": "متوسطة" },
+        { "value": "not", "label_en": "Not sensitive", "label_ar": "غير حساسة" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "fragrance_preference",
+      "text_en": "How do you feel about fragrance?",
+      "text_ar": "ما رأيك بالعطور في المنتج؟",
+      "type": "single",
+      "options": [
+        { "value": "fragrance_free", "label_en": "Fragrance-free please", "label_ar": "خالٍ من العطور من فضلك" },
+        { "value": "light", "label_en": "Light scent is fine", "label_ar": "رائحة خفيفة مقبولة" },
+        { "value": "love_scent", "label_en": "I like a scented product", "label_ar": "أحب المنتج المعطر" },
+        { "value": "no_preference", "label_en": "No preference", "label_ar": "لا تفضيل" }
+      ]
+    },
+    {
+      "key": "texture_preference",
+      "text_en": "Which texture do you prefer?",
+      "text_ar": "أي قوام تفضل؟",
+      "type": "single",
+      "optional": true,
+      "options": [
+        { "value": "lotion", "label_en": "Light lotion", "label_ar": "لوشن خفيف" },
+        { "value": "cream", "label_en": "Rich cream", "label_ar": "كريم غني" },
+        { "value": "butter", "label_en": "Body butter", "label_ar": "زبدة الجسم" },
+        { "value": "oil", "label_en": "Oil", "label_ar": "زيت" },
+        { "value": "no_preference", "label_en": "No preference", "label_ar": "لا تفضيل" }
+      ]
+    },
+    {
+      "key": "budget",
+      "text_en": "What budget works for you?",
+      "text_ar": "ما الميزانية المناسبة لك؟",
+      "type": "single",
+      "options": [
+        { "value": "low", "label_en": "Best value", "label_ar": "الأوفر" },
+        { "value": "mid", "label_en": "Mid-range", "label_ar": "متوسطة" },
+        { "value": "high", "label_en": "Premium", "label_ar": "فاخرة" },
+        { "value": "any", "label_en": "Show me anything suitable", "label_ar": "أرني أي خيار مناسب" }
+      ]
+    }
+  ]
+}

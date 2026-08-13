@@ -1,0 +1,45 @@
+{
+  "id": "entry",
+  "title_en": "How can I help?",
+  "title_ar": "كيف يمكنني المساعدة؟",
+  "questions": [
+    {
+      "key": "help_topic",
+      "text_en": "What would you like help with today?",
+      "text_ar": "بماذا تحب أن أساعدك اليوم؟",
+      "type": "single",
+      "options": [
+        { "value": "face", "label_en": "Face care", "label_ar": "العناية بالوجه" },
+        { "value": "body", "label_en": "Body care", "label_ar": "العناية بالجسم" },
+        { "value": "hair", "label_en": "Hair care", "label_ar": "العناية بالشعر" },
+        { "value": "vitamins", "label_en": "Vitamins & wellness", "label_ar": "الفيتامينات والصحة" },
+        { "value": "routine", "label_en": "Build a complete routine", "label_ar": "بناء روتين متكامل" },
+        { "value": "compare", "label_en": "Compare products", "label_ar": "مقارنة المنتجات" }
+      ]
+    },
+    {
+      "key": "who_for",
+      "text_en": "Who is the product for?",
+      "text_ar": "لمن هذا المنتج؟",
+      "type": "single",
+      "options": [
+        { "value": "me", "label_en": "Me", "label_ar": "لي" },
+        { "value": "child", "label_en": "My child", "label_ar": "لطفلي" },
+        { "value": "someone_else", "label_en": "Someone else", "label_ar": "لشخص آخر" }
+      ]
+    },
+    {
+      "key": "priority",
+      "text_en": "What matters most to you?",
+      "text_ar": "ما الأهم بالنسبة لك؟",
+      "type": "single",
+      "options": [
+        { "value": "best_match", "label_en": "Best match", "label_ar": "الأنسب لحالتي" },
+        { "value": "best_value", "label_en": "Best value", "label_ar": "أفضل قيمة" },
+        { "value": "premium", "label_en": "Premium option", "label_ar": "خيار فاخر" },
+        { "value": "gentle", "label_en": "Gentle formula", "label_ar": "تركيبة لطيفة" },
+        { "value": "simple", "label_en": "Fast / simple routine", "label_ar": "روتين سريع وبسيط" }
+      ]
+    }
+  ]
+}
