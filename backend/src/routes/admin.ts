@@ -15,8 +15,10 @@ import {
   labelProduct,
   labelCatalogue,
   resetUnreviewedLabels,
+  isEligibleForLabeling,
   PharmacistGateError,
 } from '../labeling/pipeline.js';
+import { startLabelJob, getCurrentJob, isJobRunning } from '../labeling/job.js';
 import { listKb, upsertKb, deleteKb, getKbEntry } from '../kb/repository.js';
 import { reindexKbEntry, reindexProducts } from '../search/embeddings.js';
 import { listEscalations, resolveEscalation } from '../safety/engine.js';
@@ -76,6 +78,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         cheap: config.openai.cheapModel,
         embed: config.openai.embedModel,
       },
+      allow_non_pharmacist_approval: config.recommendations.allowNonPharmacistApproval,
     };
   });
 
@@ -121,6 +124,47 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
+  });
+
+  // --- Background labeling job (spec: the WP dashboard polls this instead of
+  // waiting on a single long request) ----------------------------------------
+  //
+  // Starts immediately and returns; the job keeps running after the response
+  // is sent. This is what a long labeling batch used to not have — the old
+  // path blocked the whole HTTP request on the entire run, which is exactly
+  // what surfaced as a WordPress page reload timing out or a gateway error
+  // once the batch was more than a couple dozen products.
+  app.post('/api/admin/labels/run', async (request, reply) => {
+    const body = (request.body ?? {}) as { limit?: number; reindex?: boolean };
+
+    if (isJobRunning()) {
+      return reply.code(409).send({ error: 'A labeling run is already in progress.', job: getCurrentJob() });
+    }
+
+    try {
+      const job = startLabelJob({ limit: body.limit, reindex: body.reindex });
+      return { ok: true, job };
+    } catch (err) {
+      return reply.code(409).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get('/api/admin/labels/run/status', async () => {
+    return { job: getCurrentJob() };
+  });
+
+  // Names, not just a count, of products that have never been through
+  // labeling — so the dashboard can show exactly what a run is about to
+  // touch before anyone spends money finding out. Capped: this is a preview,
+  // not a full export.
+  app.get('/api/admin/labels/eligible', async (request) => {
+    const q = request.query as { limit?: string };
+    const cap = Math.min(500, Number(q.limit ?? 100));
+    const eligible = allProducts().filter(isEligibleForLabeling);
+    return {
+      total_eligible: eligible.length,
+      products: eligible.slice(0, cap).map((p) => ({ product_id: p.product_id, name: p.name })),
+    };
   });
 
   // Discards every unreviewed AI draft (pending or rejected) and resets the
@@ -288,6 +332,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     products: countProducts(),
     vectors: vectorCount(),
     missing_settings: missingSettings(),
+    allow_non_pharmacist_approval: config.recommendations.allowNonPharmacistApproval,
   }));
 
   // --- Version history ------------------------------------------------------

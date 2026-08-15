@@ -138,17 +138,23 @@ class WWC_Meta {
 	/**
 	 * Writes the verification status, refusing the write when the gate applies.
 	 *
-	 * @param int    $post_id Product ID.
-	 * @param string $status  One of the STATUS_* constants.
+	 * @param int    $post_id    Product ID.
+	 * @param string $status     One of the STATUS_* constants.
+	 * @param bool   $skip_gate  Bypass the local pharmacist-only check. Only
+	 *                           pass true when the backend has already
+	 *                           authoritatively approved this write (e.g. under
+	 *                           ALLOW_NON_PHARMACIST_APPROVAL) — this local
+	 *                           gate is a UI convenience, the backend is the
+	 *                           source of truth.
 	 * @return true|WP_Error
 	 */
-	public static function set_verification_status( $post_id, $status ) {
+	public static function set_verification_status( $post_id, $status, $skip_gate = false ) {
 		$allowed = array( self::STATUS_VERIFIED, self::STATUS_PARTIAL, self::STATUS_UNVERIFIED, self::STATUS_NEEDS_RX );
 		if ( ! in_array( $status, $allowed, true ) ) {
 			return new WP_Error( 'wwc_bad_status', __( 'Unknown verification status.', 'wellness-chatbot' ) );
 		}
 
-		if ( self::STATUS_VERIFIED === $status && ! self::can_verify( $post_id ) ) {
+		if ( self::STATUS_VERIFIED === $status && ! $skip_gate && ! self::can_verify( $post_id ) ) {
 			return new WP_Error(
 				'wwc_pharmacist_required',
 				__( 'This product needs a pharmacist reviewer to verify it.', 'wellness-chatbot' )

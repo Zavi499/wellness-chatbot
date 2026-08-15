@@ -73,8 +73,21 @@ function notIdealText(product: Product): string {
 export function checkEligibility(
   product: Product,
   profile: CustomerProfile,
-  opts: { excludeIds?: number[] } = {},
+  opts: {
+    excludeIds?: number[];
+    /**
+     * Defaults to the store's own configured choice
+     * (`ALLOW_NON_PHARMACIST_APPROVAL`, off unless explicitly turned on).
+     * Exposed as an explicit parameter — not read from `config` inline —
+     * purely so both states of this safety-critical branch are directly
+     * unit-testable rather than only ever exercised under whatever the
+     * process happened to boot with.
+     */
+    allowNonPharmacistApproval?: boolean;
+  } = {},
 ): EligibilityResult {
+  const allowNonPharmacistApproval =
+    opts.allowNonPharmacistApproval ?? config.recommendations.allowNonPharmacistApproval;
   const reasons: IneligibilityReason[] = [];
 
   if (opts.excludeIds?.includes(product.product_id)) reasons.push('excluded');
@@ -88,10 +101,18 @@ export function checkEligibility(
     : ['verified'];
   if (!acceptable.includes(product.verification_status)) reasons.push('not_verified');
 
-  // 3. The pharmacist gate — `verified` alone is not enough for these products.
+  // 3. The pharmacist gate — `verified` alone is not enough for these products,
+  // unless the store has explicitly opted into letting any admin's approval
+  // count (§ALLOW_NON_PHARMACIST_APPROVAL). `partial` still never qualifies a
+  // gated product either way — bulk-approve, the only path that sets
+  // `partial` on a gated item, is kept out of scope of this setting entirely
+  // on the WordPress side.
   if (
     product.requires_pharmacist_review &&
-    !(product.verification_status === 'verified' && product.verified_by_pharmacist)
+    !(
+      product.verification_status === 'verified' &&
+      (product.verified_by_pharmacist || allowNonPharmacistApproval)
+    )
   ) {
     reasons.push('needs_pharmacist_verification');
   }

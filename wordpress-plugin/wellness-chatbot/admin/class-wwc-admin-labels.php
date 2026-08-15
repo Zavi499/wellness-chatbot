@@ -19,7 +19,16 @@ class WWC_Admin_Labels {
 		add_action( 'admin_post_wwc_relabel', array( __CLASS__, 'handle_relabel' ) );
 		add_action( 'admin_post_wwc_bulk_approve', array( __CLASS__, 'handle_bulk_approve' ) );
 		add_action( 'admin_post_wwc_reset_labels', array( __CLASS__, 'handle_reset_labels' ) );
-		add_action( 'admin_post_wwc_run_labeling', array( __CLASS__, 'handle_run_labeling' ) );
+
+		// AJAX, not admin-post.php: starting a labeling batch used to be a
+		// blocking form submission that held the page open for the entire
+		// run, which is exactly what surfaced as a stuck reload or a gateway
+		// timeout once a batch ran longer than a request typically lives.
+		// The backend now starts the job and returns immediately; these three
+		// endpoints are what the page polls instead of waiting.
+		add_action( 'wp_ajax_wwc_start_labeling', array( __CLASS__, 'ajax_start_labeling' ) );
+		add_action( 'wp_ajax_wwc_labeling_status', array( __CLASS__, 'ajax_labeling_status' ) );
+		add_action( 'wp_ajax_wwc_eligible_products', array( __CLASS__, 'ajax_eligible_products' ) );
 	}
 
 	public static function render() {
@@ -44,9 +53,10 @@ class WWC_Admin_Labels {
 			return;
 		}
 
-		$rows   = isset( $result['rows'] ) && is_array( $result['rows'] ) ? $result['rows'] : array();
-		$counts = isset( $result['counts'] ) ? $result['counts'] : array();
-		$models = isset( $result['models'] ) && is_array( $result['models'] ) ? $result['models'] : array();
+		$rows                 = isset( $result['rows'] ) && is_array( $result['rows'] ) ? $result['rows'] : array();
+		$counts               = isset( $result['counts'] ) ? $result['counts'] : array();
+		$models               = isset( $result['models'] ) && is_array( $result['models'] ) ? $result['models'] : array();
+		$allow_non_pharmacist = ! empty( $result['allow_non_pharmacist_approval'] );
 
 		self::render_summary( $counts );
 		self::render_run_labeling( $counts, $models );
@@ -59,7 +69,7 @@ class WWC_Admin_Labels {
 			self::render_bulk_bar();
 
 			foreach ( $rows as $row ) {
-				self::render_row( $row );
+				self::render_row( $row, $allow_non_pharmacist );
 			}
 
 			self::render_pagination( $page, count( $rows ), $limit );
@@ -72,30 +82,34 @@ class WWC_Admin_Labels {
 	 * Starts a labeling batch directly against the catalogue already on the
 	 * backend — no export, no upload, nothing else involved. This is the
 	 * dashboard equivalent of running `npm run label:prod -- --limit N` in
-	 * the backend's own terminal; it calls the same endpoint the catalogue
-	 * upload screen uses for its own "also run labeling" option, just without
-	 * an upload attached.
+	 * the backend's own terminal.
 	 *
-	 * Always has a limit, for the same reason the upload screen's does: a
-	 * blank or zero value is never sent as "no limit" to the backend.
+	 * Entirely JS-driven (see assets/js/admin.js) rather than a submitted
+	 * form: starting used to block the page on the whole run via
+	 * admin-post.php, which is exactly what surfaced as a stuck reload or a
+	 * gateway timeout once a batch ran long. The backend now starts the job
+	 * and returns immediately; these elements are what the polling script
+	 * reads from and writes into. If a job is already running when this page
+	 * loads, the script notices on its first status check and resumes
+	 * showing it — you don't have to have been the one who started it.
 	 *
 	 * @param array $counts Product counts (for the "how many still need labeling" hint).
 	 * @param array $models Current model config from the backend, so the cost
 	 *                       this is about to incur is visible before it's incurred.
 	 */
 	private static function render_run_labeling( array $counts, array $models ) {
-		$total      = isset( $counts['total'] ) ? (int) $counts['total'] : 0;
-		$verified   = isset( $counts['verified'] ) ? (int) $counts['verified'] : 0;
-		$queued     = isset( $counts['queued'] ) ? (int) $counts['queued'] : 0;
-		$never_done = max( 0, $total - $verified - $queued );
+		$total       = isset( $counts['total'] ) ? (int) $counts['total'] : 0;
+		$verified    = isset( $counts['verified'] ) ? (int) $counts['verified'] : 0;
+		$queued      = isset( $counts['queued'] ) ? (int) $counts['queued'] : 0;
+		$never_done  = max( 0, $total - $verified - $queued );
 		$label_model = isset( $models['label'] ) ? (string) $models['label'] : null;
 
-		echo '<div class="wwc-run-labeling">';
+		echo '<div class="wwc-run-labeling" id="wwc-run-labeling">';
 		echo '<h2>' . esc_html__( 'Run AI labeling', 'wellness-chatbot' ) . '</h2>';
 
 		if ( $label_model ) {
 			printf(
-				'<p class="description">%s</p>',
+				'<p class="description" id="wwc-label-model-hint">%s</p>',
 				esc_html(
 					sprintf(
 						/* translators: 1: model id, 2: number of never-labeled products. */
@@ -105,25 +119,35 @@ class WWC_Admin_Labels {
 					)
 				)
 			);
+			printf(
+				'<p><button type="button" class="button-link" id="wwc-preview-eligible">%s</button></p>',
+				esc_html__( 'Show me which products these are', 'wellness-chatbot' )
+			);
+			echo '<div id="wwc-eligible-list" class="wwc-eligible-list" hidden></div>';
 		}
 
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="wwc-run-labeling-form">';
-		wp_nonce_field( 'wwc_run_labeling' );
-		echo '<input type="hidden" name="action" value="wwc_run_labeling" />';
+		echo '<div class="wwc-run-labeling-controls">';
 		printf(
-			'<label>%s <input type="number" name="limit" value="25" min="1" max="1000" class="small-text" /></label>',
+			'<label>%s <input type="number" id="wwc-label-limit" value="25" min="1" max="1000" class="small-text" /></label>',
 			esc_html__( 'Label at most this many products:', 'wellness-chatbot' )
 		);
 		printf(
-			' <label><input type="checkbox" name="reindex" value="1" checked="checked" /> %s</label>',
+			' <label><input type="checkbox" id="wwc-label-reindex" checked="checked" /> %s</label>',
 			esc_html__( 'rebuild search index afterwards', 'wellness-chatbot' )
 		);
 		printf(
-			' <button type="submit" class="button button-primary">%s</button>',
+			' <button type="button" class="button button-primary" id="wwc-label-start">%s</button>',
 			esc_html__( 'Run AI labeling now', 'wellness-chatbot' )
 		);
-		echo '</form>';
-		echo '<p class="description">' . esc_html__( 'A large number can outlive this page\'s request and keep running in the background on the server — for anything over a hundred or so, prefer running it from the backend\'s own terminal where you can watch it live.', 'wellness-chatbot' ) . '</p>';
+		echo '</div>';
+
+		echo '<div id="wwc-label-progress" class="wwc-label-progress" hidden>';
+		echo '<div class="wwc-label-progress-bar"><div class="wwc-label-progress-fill" id="wwc-label-progress-fill"></div></div>';
+		echo '<p class="wwc-label-progress-summary" id="wwc-label-progress-summary"></p>';
+		echo '<div class="wwc-label-log" id="wwc-label-log" role="log" aria-live="polite"></div>';
+		echo '</div>';
+
+		echo '<p class="description">' . esc_html__( 'Runs in the background on the server — you can leave this page and come back, or close the tab entirely, without stopping it.', 'wellness-chatbot' ) . '</p>';
 		echo '</div>';
 	}
 
@@ -199,14 +223,17 @@ class WWC_Admin_Labels {
 		echo '</div>';
 	}
 
-	private static function render_row( array $row ) {
+	private static function render_row( array $row, $allow_non_pharmacist = false ) {
 		$product_id  = isset( $row['product_id'] ) ? (int) $row['product_id'] : 0;
 		$draft_id    = isset( $row['draft_id'] ) ? (int) $row['draft_id'] : 0;
 		$confidence  = isset( $row['confidence'] ) ? (float) $row['confidence'] : 0.0;
 		$needs_rx    = ! empty( $row['requires_pharmacist_review'] );
 		$low_conf    = ! empty( $row['low_confidence'] );
 		$draft       = isset( $row['draft'] ) && is_array( $row['draft'] ) ? $row['draft'] : array();
-		$can_approve = ! $needs_rx || WWC_Roles::current_user_is_pharmacist();
+		// Mirrors the backend's own gate (see checkEligibility/applyReview):
+		// a non-pharmacist admin may approve a flagged product only when the
+		// store has explicitly turned ALLOW_NON_PHARMACIST_APPROVAL on.
+		$can_approve = ! $needs_rx || WWC_Roles::current_user_is_pharmacist() || $allow_non_pharmacist;
 
 		$bulk_eligible = ! $needs_rx && ! $low_conf;
 
@@ -238,7 +265,10 @@ class WWC_Admin_Labels {
 			$low_conf ? '<span class="wwc-flag wwc-flag-warn">' . esc_html__( 'low confidence', 'wellness-chatbot' ) . '</span>' : ''
 		);
 		if ( $needs_rx ) {
-			echo '<p class="wwc-flag wwc-flag-rx">' . esc_html__( 'Pharmacist review required — only a Pharmacist Reviewer can verify this product.', 'wellness-chatbot' ) . '</p>';
+			$rx_notice = $allow_non_pharmacist
+				? __( 'Pharmacist review normally required — currently any admin may approve this product (Settings: Allow non-pharmacist approval is on).', 'wellness-chatbot' )
+				: __( 'Pharmacist review required — only a Pharmacist Reviewer can verify this product.', 'wellness-chatbot' );
+			echo '<p class="wwc-flag wwc-flag-rx">' . esc_html( $rx_notice ) . '</p>';
 		}
 		echo '</div></div>';
 
@@ -401,11 +431,9 @@ class WWC_Admin_Labels {
 		$action = ( 'reject' === $decision ) ? 'reject' : 'approve';
 		$status = ( 'approve_partial' === $decision ) ? 'partial' : 'verified';
 
-		// Local gate first, so an ineligible reviewer never even reaches the API.
-		if ( 'approve' === $action && 'verified' === $status && ! WWC_Meta::can_verify( $product_id ) ) {
-			WWC_Admin::redirect_back( WWC_Admin::MENU_SLUG, array( 'wwc_notice' => 'pharmacist_required' ) );
-		}
-
+		// The backend is the sole authority on the pharmacist gate — it already
+		// accounts for ALLOW_NON_PHARMACIST_APPROVAL, which a local pre-check
+		// here would not. Its 403 response (handled below) covers this case.
 		$response = WWC_Backend_Client::post(
 			'/api/admin/labels/' . $product_id,
 			array(
@@ -531,7 +559,13 @@ class WWC_Admin_Labels {
 
 		update_post_meta( $product_id, '_wwc_ai_generated', '0' );
 		update_post_meta( $product_id, '_wwc_source_verification_date', gmdate( 'Y-m-d' ) );
-		WWC_Meta::set_verification_status( $product_id, $status );
+
+		// This point is only reached after the backend has already
+		// authoritatively approved the write (it would have 403'd above
+		// otherwise), so the local pharmacist-only gate is bypassed here —
+		// it exists to protect direct meta edits, not to re-litigate a
+		// decision the backend already made.
+		WWC_Meta::set_verification_status( $product_id, $status, true );
 	}
 
 	public static function handle_relabel() {
@@ -606,14 +640,33 @@ class WWC_Admin_Labels {
 	}
 
 	/**
+	 * Verifies the AJAX nonce and capability, common to all three handlers
+	 * below. Dies with a JSON error (via wp_send_json_error) rather than
+	 * wp_die()'s HTML page — the caller is JS reading a response body, not a
+	 * browser navigating to a new page.
+	 *
+	 * @return bool True if the request may proceed.
+	 */
+	private static function ajax_guard() {
+		check_ajax_referer( 'wwc_admin', 'nonce' );
+		if ( ! WWC_Roles::can_manage() ) {
+			wp_send_json_error( array( 'message' => __( 'You do not have permission to do that.', 'wellness-chatbot' ) ), 403 );
+			return false;
+		}
+		return true;
+	}
+
+	/**
 	 * Starts a labeling batch with no catalogue upload involved — the
 	 * dashboard equivalent of `npm run label:prod -- --limit N` on the
-	 * backend server. Reuses the same backend endpoint the catalogue upload
-	 * screen's "also run labeling" option calls, just without any products or
-	 * prune flag attached, so it only ever does the one thing.
+	 * backend server. This call itself returns almost immediately (the
+	 * backend starts the job and responds without waiting for it), so it
+	 * never risks the timeout the old admin-post.php version could hit.
 	 */
-	public static function handle_run_labeling() {
-		WWC_Admin::verify_post( 'wwc_run_labeling' );
+	public static function ajax_start_labeling() {
+		if ( ! self::ajax_guard() ) {
+			return;
+		}
 
 		// Same rule as the upload screen: a missing or non-positive value
 		// falls back to a safe default rather than reaching the backend as
@@ -623,21 +676,68 @@ class WWC_Admin_Labels {
 		if ( $limit < 1 ) {
 			$limit = 25;
 		}
+		$limit = min( $limit, 1000 );
 
 		$response = WWC_Backend_Client::post(
-			'/api/admin/catalogue/finish',
+			'/api/admin/labels/run',
 			array(
-				'label'   => true,
 				'limit'   => $limit,
 				'reindex' => ! empty( $_POST['reindex'] ),
 			),
-			array( 'timeout' => 300 )
+			array( 'timeout' => 15 )
 		);
 
-		WWC_Admin::redirect_back(
-			WWC_Admin::MENU_SLUG,
-			array( 'wwc_notice' => is_wp_error( $response ) ? 'failed' : 'labeling_ran' )
-		);
+		if ( is_wp_error( $response ) ) {
+			$data   = $response->get_error_data();
+			$status = ( is_array( $data ) && isset( $data['status'] ) ) ? (int) $data['status'] : 500;
+			$body   = ( is_array( $data ) && isset( $data['body'] ) && is_array( $data['body'] ) ) ? $data['body'] : array();
+			// A 409 means one is already running — forward its job state too,
+			// so the page can switch straight into watching it instead of just
+			// showing a dead-end error.
+			wp_send_json_error(
+				array(
+					'message' => $response->get_error_message(),
+					'job'     => isset( $body['job'] ) ? $body['job'] : null,
+				),
+				$status
+			);
+		}
+
+		wp_send_json_success( $response );
+	}
+
+	/**
+	 * Polled every couple of seconds by the page while a run is in progress.
+	 */
+	public static function ajax_labeling_status() {
+		if ( ! self::ajax_guard() ) {
+			return;
+		}
+
+		$response = WWC_Backend_Client::get( '/api/admin/labels/run/status' );
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error( array( 'message' => $response->get_error_message() ), 502 );
+		}
+
+		wp_send_json_success( $response );
+	}
+
+	/**
+	 * "Show me which products these are" — names, not just a count, of
+	 * products a run would actually touch, so an admin can look before
+	 * spending anything finding out.
+	 */
+	public static function ajax_eligible_products() {
+		if ( ! self::ajax_guard() ) {
+			return;
+		}
+
+		$response = WWC_Backend_Client::get( '/api/admin/labels/eligible', array( 'limit' => 100 ) );
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error( array( 'message' => $response->get_error_message() ), 502 );
+		}
+
+		wp_send_json_success( $response );
 	}
 
 	private static function render_pagination( $page, $count, $limit ) {

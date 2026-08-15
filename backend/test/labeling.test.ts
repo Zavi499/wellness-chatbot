@@ -7,7 +7,13 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemoryDb, toJson } from '../src/db/index.js';
-import { isEligibleForLabeling, resetUnreviewedLabels } from '../src/labeling/pipeline.js';
+import {
+  isEligibleForLabeling,
+  resetUnreviewedLabels,
+  applyReview,
+  PharmacistGateError,
+  type ReviewDecision,
+} from '../src/labeling/pipeline.js';
 import { upsertWooFields, updateWwcFields, getProduct } from '../src/products/repository.js';
 
 describe('isEligibleForLabeling (pure)', () => {
@@ -173,5 +179,84 @@ describe('resetUnreviewedLabels', () => {
     assert.equal(getProduct(12, conn)!.ai_generated, false);
     assert.equal(getProduct(11, conn)!.verification_status, 'verified', 'untouched');
     assert.equal(getProduct(13, conn)!.ai_generated, false, 'was already false, stays false');
+  });
+});
+
+function insertPendingDraft(conn: ReturnType<typeof openMemoryDb>, productId: number): number {
+  const result = conn
+    .prepare(
+      `INSERT INTO label_drafts (product_id, category, draft_json, confidence, model, status, created_at)
+       VALUES (?, 'vitamins', ?, 0.5, 'test-model', 'pending', datetime('now'))`,
+    )
+    .run(productId, toJson({ confidence: 0.5 }));
+  return Number(result.lastInsertRowid);
+}
+
+function baseDecision(draftId: number, overrides: Partial<ReviewDecision> = {}): ReviewDecision {
+  return {
+    draftId,
+    action: 'approve',
+    status: 'verified',
+    reviewer: 'admin1',
+    reviewerIsPharmacist: false,
+    ...overrides,
+  };
+}
+
+// ALLOW_NON_PHARMACIST_APPROVAL (spec: user-confirmed "yes any admin" — see
+// backend/.env.example). Off by default; when on, any admin's approval counts
+// for a gated product, but `verified_by_pharmacist` must still only ever
+// record whether an actual pharmacist did it.
+describe('applyReview: pharmacist gate under ALLOW_NON_PHARMACIST_APPROVAL', () => {
+  test('gated product + non-pharmacist reviewer + flag off (default): still blocked', () => {
+    const conn = openMemoryDb();
+    seedProduct(conn, 100, { requires_pharmacist_review: true, verification_status: 'unverified' });
+    const draftId = insertPendingDraft(conn, 100);
+
+    assert.throws(
+      () => applyReview(baseDecision(draftId), false, conn),
+      PharmacistGateError,
+    );
+  });
+
+  test('gated product + non-pharmacist reviewer + flag on: allowed, but verified_by_pharmacist stays false', () => {
+    const conn = openMemoryDb();
+    seedProduct(conn, 101, { requires_pharmacist_review: true, verification_status: 'unverified' });
+    const draftId = insertPendingDraft(conn, 101);
+
+    const result = applyReview(baseDecision(draftId), true, conn);
+
+    assert.equal(result.status, 'verified');
+    const product = getProduct(101, conn)!;
+    assert.equal(product.verification_status, 'verified');
+    assert.equal(
+      product.verified_by_pharmacist,
+      false,
+      'audit trail must stay honest — this was not actually a pharmacist',
+    );
+  });
+
+  test('gated product + pharmacist reviewer + flag off: allowed as before, verified_by_pharmacist set true', () => {
+    const conn = openMemoryDb();
+    seedProduct(conn, 102, { requires_pharmacist_review: true, verification_status: 'unverified' });
+    const draftId = insertPendingDraft(conn, 102);
+
+    const result = applyReview(baseDecision(draftId, { reviewerIsPharmacist: true }), false, conn);
+
+    assert.equal(result.status, 'verified');
+    const product = getProduct(102, conn)!;
+    assert.equal(product.verification_status, 'verified');
+    assert.equal(product.verified_by_pharmacist, true);
+  });
+
+  test('non-gated product + non-pharmacist reviewer + flag off: unaffected, the gate never applied', () => {
+    const conn = openMemoryDb();
+    seedProduct(conn, 103, { requires_pharmacist_review: false, verification_status: 'unverified' });
+    const draftId = insertPendingDraft(conn, 103);
+
+    const result = applyReview(baseDecision(draftId), false, conn);
+
+    assert.equal(result.status, 'verified');
+    assert.equal(getProduct(103, conn)!.verification_status, 'verified');
   });
 });

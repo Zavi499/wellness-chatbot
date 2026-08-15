@@ -415,16 +415,25 @@ export interface ReviewDecision {
  * Applies a human review decision. This is the ONLY path to `verified`, and it
  * re-checks the pharmacist capability server-side — the UI hiding the button is
  * not the control (spec §11).
+ *
+ * `allowNonPharmacistApproval` defaults to the store's own configured choice
+ * (`ALLOW_NON_PHARMACIST_APPROVAL`, off unless explicitly turned on) rather
+ * than being read from `config` inline, so both states of this specific
+ * safety-critical branch are directly unit-testable rather than only ever
+ * exercised under whatever the process happened to boot with.
  */
-export function applyReview(decision: ReviewDecision): { product_id: number; status: string } {
-  const conn = db();
+export function applyReview(
+  decision: ReviewDecision,
+  allowNonPharmacistApproval: boolean = config.recommendations.allowNonPharmacistApproval,
+  conn: DatabaseSync = db(),
+): { product_id: number; status: string } {
   const row = conn
     .prepare(`SELECT product_id FROM label_drafts WHERE id = ? AND status = 'pending'`)
     .get(decision.draftId) as Record<string, unknown> | undefined;
   if (!row) throw new Error(`No pending label draft with id ${decision.draftId}`);
 
   const productId = Number(row.product_id);
-  const product = getProduct(productId);
+  const product = getProduct(productId, conn);
   if (!product) throw new Error(`Product ${productId} no longer exists`);
 
   if (decision.action === 'reject') {
@@ -450,7 +459,13 @@ export function applyReview(decision: ReviewDecision): { product_id: number; sta
   // would still be blocked from recommendation by the eligibility filter, but
   // it would silently drop the product out of the review queue without the
   // pharmacist ever having seen it, which defeats the point of the gate.
-  if (product.requires_pharmacist_review && !decision.reviewerIsPharmacist) {
+  //
+  // `allowNonPharmacistApproval` is the one, explicit, off-by-default escape
+  // hatch from that — a deliberate store-owner choice, not a bypass. It never
+  // touches `verified_by_pharmacist` below: that field stays an honest record
+  // of whether an actual pharmacist reviewer did this, regardless of who was
+  // *allowed* to.
+  if (product.requires_pharmacist_review && !decision.reviewerIsPharmacist && !allowNonPharmacistApproval) {
     throw new PharmacistGateError(productId);
   }
 
@@ -463,7 +478,7 @@ export function applyReview(decision: ReviewDecision): { product_id: number; sta
     patch.verified_by_pharmacist = true;
   }
 
-  updateWwcFields(productId, patch);
+  updateWwcFields(productId, patch, conn);
 
   conn
     .prepare(

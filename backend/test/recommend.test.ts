@@ -102,6 +102,35 @@ describe('eligibility (§3.4)', () => {
     assert.equal(checkEligibility(properlyVerified, profile).eligible, true);
   });
 
+  test('ALLOW_NON_PHARMACIST_APPROVAL: an admin-only verified, gated product becomes eligible when the flag is on', () => {
+    const adminVerified = product({ requires_pharmacist_review: true, verified_by_pharmacist: false });
+
+    assert.ok(
+      checkEligibility(adminVerified, profile, { allowNonPharmacistApproval: false }).reasons.includes(
+        'needs_pharmacist_verification',
+      ),
+      'off by default — same behaviour as no option passed at all',
+    );
+    assert.equal(
+      checkEligibility(adminVerified, profile, { allowNonPharmacistApproval: true }).eligible,
+      true,
+      'store explicitly opted in — any admin approval now counts',
+    );
+  });
+
+  test('ALLOW_NON_PHARMACIST_APPROVAL never rescues a merely `partial` gated product', () => {
+    const partialGated = product({
+      verification_status: 'partial',
+      requires_pharmacist_review: true,
+      verified_by_pharmacist: false,
+    });
+    const result = checkEligibility(partialGated, profile, { allowNonPharmacistApproval: true });
+    assert.ok(
+      result.reasons.includes('needs_pharmacist_verification'),
+      'only `verified` qualifies a gated product, even with the flag on — partial (e.g. bulk-approve) must stay inert here',
+    );
+  });
+
   test('rejects a product whose not_ideal_for conflicts with the customer', () => {
     const sensitiveProfile = buildProfile('face', {
       skin_type: 'sensitive',

@@ -86,12 +86,88 @@
 	font-size: 15px;
 }
 
-.wwc-run-labeling-form {
+.wwc-run-labeling-controls {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 6px 16px;
 	margin: 10px 0;
+}
+
+.wwc-eligible-list {
+	background: var(--wwc-50);
+	border-radius: 4px;
+	padding: 10px 14px;
+	margin: 4px 0 10px;
+	max-height: 220px;
+	overflow-y: auto;
+	font-size: 13px;
+}
+
+.wwc-eligible-list ul {
+	margin: 0;
+	padding-inline-start: 20px;
+}
+
+.wwc-eligible-list li {
+	margin-bottom: 2px;
+}
+
+/* --- Labeling progress (AJAX) -------------------------------------------- */
+.wwc-label-progress {
+	margin-top: 12px;
+	border-top: 1px solid var(--wwc-border);
+	padding-top: 12px;
+}
+
+.wwc-label-progress-bar {
+	height: 8px;
+	background: var(--wwc-100);
+	border-radius: 999px;
+	overflow: hidden;
+	margin-bottom: 8px;
+}
+
+.wwc-label-progress-fill {
+	display: block;
+	height: 100%;
+	width: 0;
+	background: var(--wwc-primary);
+	transition: width 0.3s ease;
+	border-radius: 999px;
+}
+
+.wwc-label-progress-summary {
+	margin: 0 0 8px;
+	font-weight: 600;
+	color: var(--wwc-primary-text);
+}
+
+.wwc-label-log {
+	background: #1d2327;
+	color: #c3c4c7;
+	border-radius: 4px;
+	padding: 10px 14px;
+	max-height: 260px;
+	overflow-y: auto;
+	font-family: Consolas, Menlo, Monaco, monospace;
+	font-size: 12px;
+	line-height: 1.6;
+}
+
+.wwc-log-line {
+	margin: 0 0 2px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.wwc-log-error {
+	color: #f86368;
+}
+
+.wwc-log-done {
+	color: #68de7c;
+	margin-top: 6px;
 }
 
 /* --- Bulk approve bar -------------------------------------------------- */
