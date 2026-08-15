@@ -67,6 +67,78 @@
 	margin-bottom: 12px;
 }
 
+.wwc-row-check {
+	margin-top: 4px;
+}
+
+/* --- Run AI labeling ----------------------------------------------------- */
+.wwc-run-labeling {
+	background: #fff;
+	border: 1px solid var(--wwc-border);
+	border-top: 3px solid var(--wwc-primary);
+	border-radius: 6px;
+	padding: 14px 18px;
+	margin-bottom: 20px;
+}
+
+.wwc-run-labeling h2 {
+	margin: 0 0 6px;
+	font-size: 15px;
+}
+
+.wwc-run-labeling-form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 16px;
+	margin: 10px 0;
+}
+
+/* --- Bulk approve bar -------------------------------------------------- */
+.wwc-bulk-form {
+	display: none;
+}
+
+.wwc-bulk-bar {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	background: var(--wwc-50);
+	border: 1px solid var(--wwc-border);
+	border-radius: 6px;
+	padding: 10px 14px;
+	margin: 0 0 16px;
+}
+
+.wwc-bulk-bar .description {
+	margin: 0;
+	color: #646970;
+}
+
+#wwc-bulk-submit:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* --- Danger zone --------------------------------------------------------- */
+.wwc-danger-zone {
+	margin-top: 32px;
+	padding: 16px 18px;
+	border: 1px solid #d63638;
+	border-radius: 6px;
+	background: #fffafa;
+}
+
+.wwc-danger-zone h2 {
+	margin: 0 0 6px;
+	font-size: 15px;
+	color: #b32d2e;
+}
+
+.wwc-danger-zone .description {
+	margin: 0 0 12px;
+}
+
 .wwc-review-head h2 {
 	margin: 0 0 4px;
 	font-size: 16px;

@@ -18,6 +18,8 @@ class WWC_Admin_Labels {
 		add_action( 'admin_post_wwc_review_label', array( __CLASS__, 'handle_review' ) );
 		add_action( 'admin_post_wwc_relabel', array( __CLASS__, 'handle_relabel' ) );
 		add_action( 'admin_post_wwc_bulk_approve', array( __CLASS__, 'handle_bulk_approve' ) );
+		add_action( 'admin_post_wwc_reset_labels', array( __CLASS__, 'handle_reset_labels' ) );
+		add_action( 'admin_post_wwc_run_labeling', array( __CLASS__, 'handle_run_labeling' ) );
 	}
 
 	public static function render() {
@@ -44,21 +46,145 @@ class WWC_Admin_Labels {
 
 		$rows   = isset( $result['rows'] ) && is_array( $result['rows'] ) ? $result['rows'] : array();
 		$counts = isset( $result['counts'] ) ? $result['counts'] : array();
+		$models = isset( $result['models'] ) && is_array( $result['models'] ) ? $result['models'] : array();
 
 		self::render_summary( $counts );
+		self::render_run_labeling( $counts, $models );
 
 		if ( empty( $rows ) ) {
-			echo '<p>' . esc_html__( 'Nothing is waiting for review. Run a labeling pass from the backend if products are still unverified.', 'wellness-chatbot' ) . '</p>';
-			return;
+			echo '<p>' . esc_html__( 'Nothing is waiting for review. Run AI labeling above if products are still unverified.', 'wellness-chatbot' ) . '</p>';
+		} else {
+			echo '<p class="description">' . esc_html__( 'Sorted by lowest AI confidence first — the drafts most likely to be wrong are at the top.', 'wellness-chatbot' ) . '</p>';
+
+			self::render_bulk_bar();
+
+			foreach ( $rows as $row ) {
+				self::render_row( $row );
+			}
+
+			self::render_pagination( $page, count( $rows ), $limit );
 		}
 
-		echo '<p class="description">' . esc_html__( 'Sorted by lowest AI confidence first — the drafts most likely to be wrong are at the top.', 'wellness-chatbot' ) . '</p>';
+		self::render_danger_zone( isset( $counts['queued'] ) ? (int) $counts['queued'] : 0 );
+	}
 
-		foreach ( $rows as $row ) {
-			self::render_row( $row );
+	/**
+	 * Starts a labeling batch directly against the catalogue already on the
+	 * backend — no export, no upload, nothing else involved. This is the
+	 * dashboard equivalent of running `npm run label:prod -- --limit N` in
+	 * the backend's own terminal; it calls the same endpoint the catalogue
+	 * upload screen uses for its own "also run labeling" option, just without
+	 * an upload attached.
+	 *
+	 * Always has a limit, for the same reason the upload screen's does: a
+	 * blank or zero value is never sent as "no limit" to the backend.
+	 *
+	 * @param array $counts Product counts (for the "how many still need labeling" hint).
+	 * @param array $models Current model config from the backend, so the cost
+	 *                       this is about to incur is visible before it's incurred.
+	 */
+	private static function render_run_labeling( array $counts, array $models ) {
+		$total      = isset( $counts['total'] ) ? (int) $counts['total'] : 0;
+		$verified   = isset( $counts['verified'] ) ? (int) $counts['verified'] : 0;
+		$queued     = isset( $counts['queued'] ) ? (int) $counts['queued'] : 0;
+		$never_done = max( 0, $total - $verified - $queued );
+		$label_model = isset( $models['label'] ) ? (string) $models['label'] : null;
+
+		echo '<div class="wwc-run-labeling">';
+		echo '<h2>' . esc_html__( 'Run AI labeling', 'wellness-chatbot' ) . '</h2>';
+
+		if ( $label_model ) {
+			printf(
+				'<p class="description">%s</p>',
+				esc_html(
+					sprintf(
+						/* translators: 1: model id, 2: number of never-labeled products. */
+						__( 'Will run against %1$s. Roughly %2$d products have never been labeled at all.', 'wellness-chatbot' ),
+						$label_model,
+						$never_done
+					)
+				)
+			);
 		}
 
-		self::render_pagination( $page, count( $rows ), $limit );
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="wwc-run-labeling-form">';
+		wp_nonce_field( 'wwc_run_labeling' );
+		echo '<input type="hidden" name="action" value="wwc_run_labeling" />';
+		printf(
+			'<label>%s <input type="number" name="limit" value="25" min="1" max="1000" class="small-text" /></label>',
+			esc_html__( 'Label at most this many products:', 'wellness-chatbot' )
+		);
+		printf(
+			' <label><input type="checkbox" name="reindex" value="1" checked="checked" /> %s</label>',
+			esc_html__( 'rebuild search index afterwards', 'wellness-chatbot' )
+		);
+		printf(
+			' <button type="submit" class="button button-primary">%s</button>',
+			esc_html__( 'Run AI labeling now', 'wellness-chatbot' )
+		);
+		echo '</form>';
+		echo '<p class="description">' . esc_html__( 'A large number can outlive this page\'s request and keep running in the background on the server — for anything over a hundred or so, prefer running it from the backend\'s own terminal where you can watch it live.', 'wellness-chatbot' ) . '</p>';
+		echo '</div>';
+	}
+
+	/**
+	 * A form with (almost) nothing in it — the bulk-select checkboxes live
+	 * inside each row card, wired to this form via the HTML `form=""`
+	 * attribute rather than DOM nesting, since a `<form>` cannot nest inside
+	 * another and each row keeps its own separate approve/reject form.
+	 */
+	private static function render_bulk_bar() {
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" id="wwc-bulk-form" class="wwc-bulk-form">';
+		wp_nonce_field( 'wwc_bulk_approve' );
+		echo '<input type="hidden" name="action" value="wwc_bulk_approve" />';
+		echo '</form>';
+
+		echo '<div class="wwc-bulk-bar">';
+		printf(
+			'<label><input type="checkbox" id="wwc-select-all" /> %s</label>',
+			esc_html__( 'Select all eligible on this page', 'wellness-chatbot' )
+		);
+		printf(
+			'<button type="submit" form="wwc-bulk-form" class="button button-primary wwc-confirm-bulk" id="wwc-bulk-submit" disabled="disabled">%s</button>',
+			esc_html__( 'Approve selected as partial', 'wellness-chatbot' )
+		);
+		printf(
+			'<span class="description">%s</span>',
+			esc_html__( 'Only products that need no pharmacist review and scored above the low-confidence line can be bulk approved. Everything else still needs its own look.', 'wellness-chatbot' )
+		);
+		echo '</div>';
+	}
+
+	/**
+	 * A clearly separated, rarely-needed action: discards every unreviewed AI
+	 * draft and resets the affected products to a clean, never-labeled state.
+	 * Never touches anything a human has already verified or partially
+	 * approved — enforced server-side, not just by this UI.
+	 *
+	 * @param int $queued Roughly how many products are currently unreviewed.
+	 */
+	private static function render_danger_zone( $queued ) {
+		echo '<div class="wwc-danger-zone">';
+		echo '<h2>' . esc_html__( 'Danger zone', 'wellness-chatbot' ) . '</h2>';
+		printf(
+			'<p class="description">%s</p>',
+			esc_html(
+				sprintf(
+					/* translators: %d: number of products currently awaiting review. */
+					__( 'Discards every unreviewed AI draft (roughly %d products right now) and resets them to a clean, never-labeled state — for when a labeling run used the wrong model, ran without a limit, or otherwise needs to be redone from scratch. Products you or your pharmacist have already approved are never touched.', 'wellness-chatbot' ),
+					$queued
+				)
+			)
+		);
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+		wp_nonce_field( 'wwc_reset_labels' );
+		echo '<input type="hidden" name="action" value="wwc_reset_labels" />';
+		printf(
+			'<button type="submit" class="button button-link-delete wwc-confirm-reset">%s</button>',
+			esc_html__( 'Clear all unreviewed AI drafts', 'wellness-chatbot' )
+		);
+		echo '</form>';
+		echo '</div>';
 	}
 
 	private static function render_summary( $counts ) {
@@ -82,9 +208,19 @@ class WWC_Admin_Labels {
 		$draft       = isset( $row['draft'] ) && is_array( $row['draft'] ) ? $row['draft'] : array();
 		$can_approve = ! $needs_rx || WWC_Roles::current_user_is_pharmacist();
 
+		$bulk_eligible = ! $needs_rx && ! $low_conf;
+
 		echo '<div class="wwc-review-card' . ( $low_conf ? ' wwc-low-confidence' : '' ) . '">';
 
 		echo '<div class="wwc-review-head">';
+		if ( $bulk_eligible ) {
+			printf(
+				'<input type="checkbox" class="wwc-row-check" name="draft_ids[]" value="%1$d" form="wwc-bulk-form" aria-label="%2$s" />',
+				(int) $draft_id,
+				esc_attr__( 'Select for bulk approval', 'wellness-chatbot' )
+			);
+			printf( '<input type="hidden" name="product_for_%1$d" value="%2$d" form="wwc-bulk-form" />', (int) $draft_id, (int) $product_id );
+		}
 		if ( ! empty( $row['image_url'] ) ) {
 			printf( '<img src="%s" alt="" class="wwc-thumb" />', esc_url( $row['image_url'] ) );
 		}
@@ -445,6 +581,62 @@ class WWC_Admin_Labels {
 		WWC_Admin::redirect_back(
 			WWC_Admin::MENU_SLUG,
 			array( 'wwc_notice' => $failed > 0 ? 'failed' : 'approved' )
+		);
+	}
+
+	/**
+	 * Discards every unreviewed AI draft and resets the affected products.
+	 * The backend independently guarantees this can never touch a
+	 * verified/partial product — this handler doesn't need to re-check that,
+	 * only pass the confirmation through.
+	 */
+	public static function handle_reset_labels() {
+		WWC_Admin::verify_post( 'wwc_reset_labels' );
+
+		$response = WWC_Backend_Client::post(
+			'/api/admin/labels/reset-unreviewed',
+			array( 'confirm' => true ),
+			array( 'timeout' => 60 )
+		);
+
+		WWC_Admin::redirect_back(
+			WWC_Admin::MENU_SLUG,
+			array( 'wwc_notice' => is_wp_error( $response ) ? 'failed' : 'reset' )
+		);
+	}
+
+	/**
+	 * Starts a labeling batch with no catalogue upload involved — the
+	 * dashboard equivalent of `npm run label:prod -- --limit N` on the
+	 * backend server. Reuses the same backend endpoint the catalogue upload
+	 * screen's "also run labeling" option calls, just without any products or
+	 * prune flag attached, so it only ever does the one thing.
+	 */
+	public static function handle_run_labeling() {
+		WWC_Admin::verify_post( 'wwc_run_labeling' );
+
+		// Same rule as the upload screen: a missing or non-positive value
+		// falls back to a safe default rather than reaching the backend as
+		// "no limit" — this control must never be able to relabel an entire
+		// catalogue in one uncontrolled run.
+		$limit = isset( $_POST['limit'] ) ? absint( $_POST['limit'] ) : 0;
+		if ( $limit < 1 ) {
+			$limit = 25;
+		}
+
+		$response = WWC_Backend_Client::post(
+			'/api/admin/catalogue/finish',
+			array(
+				'label'   => true,
+				'limit'   => $limit,
+				'reindex' => ! empty( $_POST['reindex'] ),
+			),
+			array( 'timeout' => 300 )
+		);
+
+		WWC_Admin::redirect_back(
+			WWC_Admin::MENU_SLUG,
+			array( 'wwc_notice' => is_wp_error( $response ) ? 'failed' : 'labeling_ran' )
 		);
 	}
 

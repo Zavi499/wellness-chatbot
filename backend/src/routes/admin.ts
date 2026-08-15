@@ -7,8 +7,16 @@
  * this service still re-checks the pharmacist gate itself (spec §11).
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { config } from '../config.js';
 import { verifySignature } from '../security/hmac.js';
-import { reviewQueue, applyReview, labelProduct, labelCatalogue, PharmacistGateError } from '../labeling/pipeline.js';
+import {
+  reviewQueue,
+  applyReview,
+  labelProduct,
+  labelCatalogue,
+  resetUnreviewedLabels,
+  PharmacistGateError,
+} from '../labeling/pipeline.js';
 import { listKb, upsertKb, deleteKb, getKbEntry } from '../kb/repository.js';
 import { reindexKbEntry, reindexProducts } from '../search/embeddings.js';
 import { listEscalations, resolveEscalation } from '../safety/engine.js';
@@ -60,6 +68,14 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return {
       rows: reviewQueue(Number(q.limit ?? 50), Number(q.offset ?? 0)),
       counts: countProducts(),
+      // Surfaced so the admin screen can show which model a labeling run will
+      // actually bill against before anyone clicks the button.
+      models: {
+        label: config.openai.labelModel,
+        chat: config.openai.chatModel,
+        cheap: config.openai.cheapModel,
+        embed: config.openai.embedModel,
+      },
     };
   });
 
@@ -105,6 +121,22 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
+  });
+
+  // Discards every unreviewed AI draft (pending or rejected) and resets the
+  // affected products back to a clean, never-labeled state. Never touches a
+  // product a human has already verified or partially approved — see
+  // resetUnreviewedLabels()'s own guard. `confirm` is required so this can
+  // never fire from a stray or automated request.
+  app.post('/api/admin/labels/reset-unreviewed', async (request, reply) => {
+    const body = (request.body ?? {}) as { confirm?: boolean };
+    if (body.confirm !== true) {
+      return reply.code(400).send({ error: 'Set confirm: true to reset unreviewed AI labels.' });
+    }
+    const identity = identityOf(request);
+    const result = resetUnreviewedLabels(identity.user);
+    request.log.warn({ result, actor: identity.user }, 'Unreviewed AI labels reset');
+    return { ok: true, ...result, products: countProducts() };
   });
 
   app.get('/api/admin/labels/:product_id/detail', async (request, reply) => {
@@ -218,6 +250,11 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  // Also doubles as the WP dashboard's standalone "run labeling now" action:
+  // called with just { label: true, limit } and no product_ids/prune, this
+  // runs a labeling batch against the existing catalogue with no import
+  // involved at all — the same thing `npm run label:prod -- --limit N` does
+  // from the backend's own terminal, just triggered from wp-admin instead.
   app.post('/api/admin/catalogue/finish', async (request) => {
     const body = (request.body ?? {}) as {
       reindex?: boolean;
@@ -241,9 +278,9 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (body.reindex) result.embedded = await reindexProducts();
-    if (body.label) result.labeling = await labelCatalogue({ skipQueued: true, limit: body.limit });
+    if (body.label) result.labeling = await labelCatalogue({ limit: body.limit });
 
-    request.log.info({ result }, 'Catalogue import finished');
+    request.log.info({ result }, 'Catalogue maintenance run finished (import/label/prune, as requested)');
     return { ok: true, ...result, products: countProducts() };
   });
 

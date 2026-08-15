@@ -5,6 +5,7 @@
  * apply the pharmacist gate → queue for human review. Nothing in this file can
  * produce a `verified` product; only an authenticated human action can (§11).
  */
+import type { DatabaseSync } from 'node:sqlite';
 import { db, nowIso, toJson } from '../db/index.js';
 import { openai, models } from '../openai/client.js';
 import { config } from '../config.js';
@@ -127,6 +128,39 @@ export function draftToPatch(draft: LabelDraft, confidence: number, requiresRevi
   };
 }
 
+/**
+ * The fields a reset should clear — exactly the inverse of `draftToPatch()`.
+ * Kept as its own list rather than derived, so a future field added to one
+ * doesn't silently get missed by the other; the tests below catch drift.
+ */
+const RESET_PATCH = {
+  name_ar: null,
+  concern_primary: { en: [], ar: [] },
+  concern_secondary: { en: [], ar: [] },
+  suitable_types: { en: [], ar: [] },
+  not_ideal_for: { en: null, ar: null },
+  key_ingredients: [],
+  texture_finish: { en: null, ar: null },
+  fragrance: 'unspecified',
+  fragrance_type: null,
+  alcohol: 'unspecified',
+  alcohol_type: null,
+  how_to_use: { en: null, ar: null },
+  routine_step: null,
+  routine_time: null,
+  age_suitability: 'all',
+  age_min: null,
+  age_max: null,
+  pregnancy_guidance: null,
+  warnings: { en: null, ar: null },
+  synonyms_en: [],
+  synonyms_ar: [],
+  ai_generated: false,
+  ai_confidence: null,
+  requires_pharmacist_review: false,
+  verification_status: 'unverified' as const,
+} as const;
+
 export async function labelProduct(productId: number): Promise<LabelRunResult> {
   const product = getProduct(productId);
   if (!product) throw new Error(`Product ${productId} is not in the local mirror — run a sync first.`);
@@ -213,9 +247,23 @@ function insertDraft(
   return Number(result.lastInsertRowid);
 }
 
+/**
+ * Whether a product has never been through labeling and is safe to send to
+ * the model. This is unconditional, not an opt-in flag: a product that
+ * already carries an AI draft (`ai_generated = true`) — pending, rejected, or
+ * superseded, it doesn't matter which — is skipped, and so is anything a
+ * human has already verified or partially approved. The only products this
+ * lets through are ones nobody and nothing has ever touched.
+ *
+ * Exported as a pure function so it's testable without a database or OpenAI —
+ * this is the exact rule a re-run after an interrupted or accidental batch
+ * relies on to never re-spend on the same product twice.
+ */
+export function isEligibleForLabeling(p: Pick<Product, 'ai_generated' | 'verification_status'>): boolean {
+  return !p.ai_generated && p.verification_status === 'unverified';
+}
+
 export interface BackfillOptions {
-  /** Skip products that already have a pending draft. */
-  skipQueued?: boolean;
   limit?: number;
   onProgress?: (done: number, total: number, last: LabelRunResult | Error) => void;
 }
@@ -226,20 +274,7 @@ export async function labelCatalogue(opts: BackfillOptions = {}): Promise<{
   failed: number;
   errors: { product_id: number; message: string }[];
 }> {
-  const conn = db();
-  let products = allProducts();
-
-  if (opts.skipQueued) {
-    const queued = new Set(
-      (conn.prepare(`SELECT product_id FROM label_drafts WHERE status = 'pending'`).all() as Record<
-        string,
-        unknown
-      >[]).map((r) => Number(r.product_id)),
-    );
-    products = products.filter((p) => !queued.has(p.product_id));
-  }
-  // Never re-label human-verified data.
-  products = products.filter((p) => !(p.verification_status === 'verified' && !p.ai_generated));
+  let products = allProducts().filter(isEligibleForLabeling);
 
   if (opts.limit) products = products.slice(0, opts.limit);
 
@@ -261,6 +296,49 @@ export async function labelCatalogue(opts: BackfillOptions = {}): Promise<{
   }
 
   return { labeled, failed, errors };
+}
+
+/**
+ * Wipes every unreviewed AI draft back to a clean, never-labeled state — for
+ * discarding a labeling run that went wrong (wrong model, ran unbounded,
+ * whatever) without waiting to click Reject on each item one at a time.
+ *
+ * The one invariant this can never violate: a product a human has already
+ * marked `verified` or `partial` is untouched, full stop. The query below
+ * only ever selects `ai_generated = 1` products that are still `unverified` —
+ * there is no code path here that can reach anything a human approved.
+ */
+export function resetUnreviewedLabels(
+  actor?: string,
+  conn: DatabaseSync = db(),
+): { products_reset: number; drafts_removed: number } {
+  const targets = conn
+    .prepare(`SELECT product_id FROM products WHERE ai_generated = 1 AND verification_status = 'unverified'`)
+    .all() as { product_id: number }[];
+
+  for (const { product_id } of targets) {
+    updateWwcFields(product_id, RESET_PATCH, conn);
+  }
+
+  let draftsRemoved = 0;
+  if (targets.length > 0) {
+    const placeholders = targets.map(() => '?').join(',');
+    const ids = targets.map((t) => t.product_id);
+    const result = conn
+      .prepare(`DELETE FROM label_drafts WHERE product_id IN (${placeholders})`)
+      .run(...ids);
+    draftsRemoved = Number(result.changes ?? 0);
+  }
+
+  logAudit({
+    entity: 'product',
+    entityId: 'bulk',
+    action: 'ai_labels_reset',
+    actor,
+    detail: { products_reset: targets.length, drafts_removed: draftsRemoved },
+  });
+
+  return { products_reset: targets.length, drafts_removed: draftsRemoved };
 }
 
 // --- Review queue -----------------------------------------------------------
@@ -367,7 +445,12 @@ export function applyReview(decision: ReviewDecision): { product_id: number; sta
 
   const status = decision.status ?? 'verified';
 
-  if (product.requires_pharmacist_review && status === 'verified' && !decision.reviewerIsPharmacist) {
+  // A gated product can only ever be touched by a pharmacist reviewer — not
+  // just for `verified`. Letting a non-pharmacist approve it as `partial`
+  // would still be blocked from recommendation by the eligibility filter, but
+  // it would silently drop the product out of the review queue without the
+  // pharmacist ever having seen it, which defeats the point of the gate.
+  if (product.requires_pharmacist_review && !decision.reviewerIsPharmacist) {
     throw new PharmacistGateError(productId);
   }
 

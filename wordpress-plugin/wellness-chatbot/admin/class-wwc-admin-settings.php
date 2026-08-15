@@ -234,6 +234,11 @@ class WWC_Admin_Settings {
 			esc_html__( 'Also run AI labeling on products that have no draft yet (uses OpenAI credit)', 'wellness-chatbot' )
 		);
 		printf(
+			'<p class="wwc-label-limit"><label>%s <input type="number" name="label_limit" value="25" min="1" max="1000" class="small-text" /></label><br /><span class="description">%s</span></p>',
+			esc_html__( 'Label at most this many products this run:', 'wellness-chatbot' ),
+			esc_html__( 'Always has a limit — this can never label your whole catalogue in one uncontrolled, unbudgeted run. Try a small number first, check the results and the cost, then raise it and run again for more.', 'wellness-chatbot' )
+		);
+		printf(
 			'<p><label><input type="checkbox" name="prune" value="1" /> %s</label><br /><span class="description">%s</span></p>',
 			esc_html__( 'Remove products the backend has that this file does not', 'wellness-chatbot' ),
 			esc_html__( 'Only tick this for a complete, current export — it deletes anything missing from the file.', 'wellness-chatbot' )
@@ -342,11 +347,21 @@ class WWC_Admin_Settings {
 		}
 
 		if ( ! $failed ) {
+			// A missing, blank or non-positive value falls back to a safe
+			// default rather than being sent as-is — an empty/zero limit would
+			// otherwise mean "no limit" once it reaches the backend, which is
+			// exactly the unbounded run this field exists to prevent.
+			$label_limit = isset( $_POST['label_limit'] ) ? absint( $_POST['label_limit'] ) : 0;
+			if ( $label_limit < 1 ) {
+				$label_limit = 25;
+			}
+
 			$response = WWC_Backend_Client::post(
 				'/api/admin/catalogue/finish',
 				array(
 					'reindex'     => ! empty( $_POST['reindex'] ),
 					'label'       => ! empty( $_POST['label'] ),
+					'limit'       => $label_limit,
 					'prune'       => ! empty( $_POST['prune'] ),
 					'product_ids' => $ids,
 				),

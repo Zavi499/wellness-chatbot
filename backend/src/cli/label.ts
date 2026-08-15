@@ -17,7 +17,6 @@ async function main(): Promise<void> {
   console.log(`Labeling with ${config.openai.labelModel}${limit ? ` (limit ${limit})` : ''}…`);
 
   const result = await labelCatalogue({
-    skipQueued: true,
     limit,
     onProgress: (done, total, last) => {
       const suffix =
