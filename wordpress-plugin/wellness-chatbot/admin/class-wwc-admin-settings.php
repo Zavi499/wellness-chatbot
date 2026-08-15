@@ -17,7 +17,8 @@ class WWC_Admin_Settings {
 
 	public static function init() {
 		add_action( 'admin_post_wwc_save_settings', array( __CLASS__, 'handle_save' ) );
-		add_action( 'admin_post_wwc_run_sync', array( __CLASS__, 'handle_sync' ) );
+		add_action( 'admin_post_wwc_export_catalogue', array( __CLASS__, 'handle_export' ) );
+		add_action( 'admin_post_wwc_upload_catalogue', array( __CLASS__, 'handle_upload' ) );
 	}
 
 	public static function render() {
@@ -205,10 +206,25 @@ class WWC_Admin_Settings {
 	}
 
 	private static function render_maintenance() {
-		echo '<h2>' . esc_html__( 'Maintenance', 'wellness-chatbot' ) . '</h2>';
+		echo '<h2>' . esc_html__( 'Catalogue', 'wellness-chatbot' ) . '</h2>';
+		echo '<p class="description">' . esc_html__( 'The backend never connects to this site to fetch products — day-to-day changes reach it automatically when you save a product. For the first load, or to resync everything at once, export a file here and upload it back.', 'wellness-chatbot' ) . '</p>';
+
+		echo '<h3>' . esc_html__( 'Export', 'wellness-chatbot' ) . '</h3>';
+		echo '<p class="description">' . esc_html__( 'Downloads every published product as one file. Reading your own product list like this costs about the same as opening the admin product list once — nothing like the load of hundreds of API calls.', 'wellness-chatbot' ) . '</p>';
 		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
-		wp_nonce_field( 'wwc_run_sync' );
-		echo '<input type="hidden" name="action" value="wwc_run_sync" />';
+		wp_nonce_field( 'wwc_export_catalogue' );
+		echo '<input type="hidden" name="action" value="wwc_export_catalogue" />';
+		printf( '<p><button type="submit" class="button">%s</button></p>', esc_html__( 'Export catalogue', 'wellness-chatbot' ) );
+		echo '</form>';
+
+		echo '<h3>' . esc_html__( 'Upload', 'wellness-chatbot' ) . '</h3>';
+		echo '<p class="description">' . esc_html__( 'Send an exported file to the backend. It is forwarded in small batches, so even a large catalogue does not become one huge request.', 'wellness-chatbot' ) . '</p>';
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" enctype="multipart/form-data">';
+		wp_nonce_field( 'wwc_upload_catalogue' );
+		echo '<input type="hidden" name="action" value="wwc_upload_catalogue" />';
+		printf(
+			'<p><input type="file" name="catalogue_file" accept="application/json,.json" required="required" /></p>'
+		);
 		printf(
 			'<p><label><input type="checkbox" name="reindex" value="1" checked="checked" /> %s</label></p>',
 			esc_html__( 'Rebuild the search index afterwards', 'wellness-chatbot' )
@@ -217,8 +233,15 @@ class WWC_Admin_Settings {
 			'<p><label><input type="checkbox" name="label" value="1" /> %s</label></p>',
 			esc_html__( 'Also run AI labeling on products that have no draft yet (uses OpenAI credit)', 'wellness-chatbot' )
 		);
-		printf( '<p><button type="submit" class="button">%s</button></p>', esc_html__( 'Sync catalogue from WooCommerce', 'wellness-chatbot' ) );
+		printf(
+			'<p><label><input type="checkbox" name="prune" value="1" /> %s</label><br /><span class="description">%s</span></p>',
+			esc_html__( 'Remove products the backend has that this file does not', 'wellness-chatbot' ),
+			esc_html__( 'Only tick this for a complete, current export — it deletes anything missing from the file.', 'wellness-chatbot' )
+		);
+		printf( '<p><button type="submit" class="button button-primary">%s</button></p>', esc_html__( 'Upload catalogue', 'wellness-chatbot' ) );
 		echo '</form>';
+
+		echo '<p class="description">' . esc_html__( 'Prefer the command line? SSH in and run: wp wellness-chatbot export — then copy the file to the backend server and run npm run import:prod.', 'wellness-chatbot' ) . '</p>';
 	}
 
 	public static function handle_save() {
@@ -252,18 +275,86 @@ class WWC_Admin_Settings {
 		WWC_Admin::redirect_back( self::PAGE, array( 'wwc_notice' => 'saved' ) );
 	}
 
-	public static function handle_sync() {
-		WWC_Admin::verify_post( 'wwc_run_sync' );
+	/**
+	 * Generates the export file and streams it straight to the browser as a
+	 * download — nothing is sent to the backend from this action.
+	 */
+	public static function handle_export() {
+		WWC_Admin::verify_post( 'wwc_export_catalogue' );
 
-		$response = WWC_Backend_Client::post(
-			'/api/admin/sync',
-			array(
-				'reindex' => ! empty( $_POST['reindex'] ),
-				'label'   => ! empty( $_POST['label'] ),
-			),
-			array( 'timeout' => 300 )
-		);
+		$file   = trailingslashit( WWC_Exporter::export_dir() ) . WWC_Exporter::default_filename();
+		$result = WWC_Exporter::export_to_file( $file );
 
-		WWC_Admin::redirect_back( self::PAGE, array( 'wwc_notice' => is_wp_error( $response ) ? 'failed' : 'saved' ) );
+		if ( is_wp_error( $result ) ) {
+			WWC_Admin::redirect_back( self::PAGE, array( 'wwc_notice' => 'failed' ) );
+		}
+
+		nocache_headers();
+		header( 'Content-Type: application/json' );
+		header( 'Content-Disposition: attachment; filename="' . basename( $file ) . '"' );
+		header( 'Content-Length: ' . filesize( $file ) );
+		readfile( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
+		exit;
+	}
+
+	/**
+	 * Forwards an uploaded export file to the backend, in batches, then asks it
+	 * to rebuild the search index (and, if asked, prune and/or label).
+	 */
+	public static function handle_upload() {
+		WWC_Admin::verify_post( 'wwc_upload_catalogue' );
+
+		if ( empty( $_FILES['catalogue_file']['tmp_name'] ) || UPLOAD_ERR_OK !== $_FILES['catalogue_file']['error'] ) {
+			WWC_Admin::redirect_back( self::PAGE, array( 'wwc_notice' => 'failed' ) );
+		}
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.Security.ValidatedSanitizedInput.MissingUnslash
+		$raw  = file_get_contents( $_FILES['catalogue_file']['tmp_name'] );
+		$data = json_decode( (string) $raw, true );
+		$products = ( is_array( $data ) && isset( $data['products'] ) && is_array( $data['products'] ) )
+			? $data['products']
+			: ( is_array( $data ) ? $data : null );
+
+		if ( empty( $products ) ) {
+			WWC_Admin::redirect_back( self::PAGE, array( 'wwc_notice' => 'failed' ) );
+		}
+
+		$ids    = array();
+		$failed = false;
+
+		foreach ( array_chunk( $products, 100 ) as $chunk ) {
+			foreach ( $chunk as $product ) {
+				if ( isset( $product['id'] ) ) {
+					$ids[] = (int) $product['id'];
+				}
+			}
+
+			$response = WWC_Backend_Client::post(
+				'/api/admin/catalogue/import',
+				array( 'products' => $chunk ),
+				array( 'timeout' => 60 )
+			);
+
+			if ( is_wp_error( $response ) ) {
+				$failed = true;
+				break;
+			}
+		}
+
+		if ( ! $failed ) {
+			$response = WWC_Backend_Client::post(
+				'/api/admin/catalogue/finish',
+				array(
+					'reindex'     => ! empty( $_POST['reindex'] ),
+					'label'       => ! empty( $_POST['label'] ),
+					'prune'       => ! empty( $_POST['prune'] ),
+					'product_ids' => $ids,
+				),
+				array( 'timeout' => 300 )
+			);
+			$failed = is_wp_error( $response );
+		}
+
+		WWC_Admin::redirect_back( self::PAGE, array( 'wwc_notice' => $failed ? 'failed' : 'saved' ) );
 	}
 }

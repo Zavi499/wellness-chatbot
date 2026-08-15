@@ -35,7 +35,13 @@ Coolify server
 | Your code in a Git repo | GitHub, GitLab, Gitea, or Bitbucket. Private is fine. |
 | A subdomain pointed at your Coolify server | e.g. `chatbot.yourstore.com`, an A record to the server's IP. Set this up first — DNS takes time to propagate, and Coolify needs it resolving before it can issue a certificate. |
 | An OpenAI API key | With billing enabled. |
-| WooCommerce read-only API keys | Created in Part 6.2 below. |
+
+**No WooCommerce API keys anywhere in this guide.** The backend never connects
+to your website — there's no REST client in the codebase to authenticate. This
+matters specifically for a Coolify/container deployment: pulling the catalogue
+over the REST API meant a second full WordPress + WooCommerce boot for every
+product a webhook had already pushed once, which is exactly the kind of load
+that exhausts a constrained hosting plan's process limits.
 
 ---
 
@@ -130,8 +136,6 @@ masked in the UI.
 OPENAI_API_KEY=sk-...
 WP_BASE_URL=https://www.wellnesspharmacykw.com
 WP_SHARED_SECRET=<generate this, see below>
-WC_CONSUMER_KEY=ck_...
-WC_CONSUMER_SECRET=cs_...
 NODE_ENV=production
 ```
 
@@ -222,18 +226,7 @@ Copy `wordpress-plugin/wellness-chatbot/` into `wp-content/plugins/` on your
 store (or zip that one folder and use **Plugins → Add New → Upload Plugin**),
 then activate it.
 
-### 6.2 Create the WooCommerce API keys
-
-**WooCommerce → Settings → Advanced → REST API → Add key**
-
-- Description: `Wellness Chatbot`
-- User: an administrator
-- Permissions: **Read** — the chatbot never writes to your store
-
-Copy both keys into Coolify's environment variables (`WC_CONSUMER_KEY` /
-`WC_CONSUMER_SECRET`) and redeploy so they take effect.
-
-### 6.3 Point WordPress at Coolify
+### 6.2 Point WordPress at Coolify
 
 In `wp-config.php`, above the `/* That's all, stop editing! */` line:
 
@@ -242,7 +235,7 @@ define( 'WELLNESS_CHATBOT_SECRET', 'the-same-secret-from-part-4' );
 define( 'WELLNESS_CHATBOT_BACKEND_URL', 'https://chatbot.yourstore.com' );
 ```
 
-### 6.4 Assign the pharmacist reviewer
+### 6.3 Assign the pharmacist reviewer
 
 **Users → (the pharmacist) → Role → Pharmacist Reviewer**
 
@@ -250,7 +243,7 @@ Until someone holds this role, no supplement or health-related product can ever
 be verified, and the assistant will refuse to recommend any of them. This is
 deliberate.
 
-### 6.5 Fill in the business facts
+### 6.4 Fill in the business facts
 
 **Wellness Chatbot → Settings** — delivery areas and fees, hours, WhatsApp
 number, payment methods, returns policy. Leave a field empty rather than
@@ -263,36 +256,63 @@ The screen should now show *"Connected"* with a product count.
 
 ## Part 7 — Running the one-off commands
 
-Seeding, syncing and labeling are one-off jobs you run inside the container.
+Seeding, loading the catalogue and labeling are one-off jobs.
 
 Coolify gives you a shell: application → **Terminal** tab (or the ⌨ icon).
 Alternatively, SSH to the server and use `docker exec`.
 
 > **Use the `:prod` scripts inside the container.** The plain `npm run seed` /
-> `sync` / `label` commands run TypeScript through `tsx`, which is a dev
+> `import` / `label` commands run TypeScript through `tsx`, which is a dev
 > dependency and is deliberately not in the production image. Running them there
 > fails. The `:prod` variants run the compiled JavaScript.
 
 ```bash
-# 1. Seed the bilingual lexicon and the FAQ topic list
+# Seed the bilingual lexicon and the FAQ topic list
 npm run seed:prod
-
-# 2. Pull the catalogue from WooCommerce and build the search index
-npm run sync:prod -- --embed
-
-# 3. A small, costed labeling trial first
-npm run label:prod -- --limit 25
-
-# 4. Once you're happy with the drafts, the full pass
-npm run label:prod
 ```
 
-Step 1 creates ~18 FAQ topics with **empty, unapproved answers** — those are for
+This creates ~18 FAQ topics with **empty, unapproved answers** — those are for
 your team to write, in **Wellness Chatbot → Knowledge Base**. Nothing unapproved
 is ever shown to a customer.
 
-You can also trigger sync and labeling from **Wellness Chatbot → Settings →
-Maintenance** in WordPress, without touching a terminal.
+### Loading the catalogue
+
+The backend has no filesystem in common with your WordPress host, so the
+practical path on Coolify is the one that doesn't need one:
+
+**From WordPress** (recommended here) — **Wellness Chatbot → Settings →
+Catalogue → Export catalogue**, then **Upload catalogue**. This is a plain
+HTTPS request straight from your site to `chatbot.yourstore.com` — nothing
+needs to land on the Coolify server's disk at all, which sidesteps the whole
+question of getting a file into the container.
+
+**From the container's shell**, if you'd rather drive it from the command line
+— get the file onto the volume first, since the Coolify terminal has no `scp`:
+
+```bash
+# From your own machine, copy the export into the running container:
+docker cp catalogue.json $(docker ps -qf "name=wellness-chatbot"):/app/data/catalogue.json
+
+# Then, in the Coolify terminal (or docker exec):
+npm run import:prod -- --file /app/data/catalogue.json --embed
+```
+
+Either way, day-to-day changes after this first load take care of themselves —
+saving a product in wp-admin queues and forwards it automatically.
+
+### Labeling
+
+```bash
+# A small, costed trial first
+npm run label:prod -- --limit 25
+
+# Once you're happy with the drafts, the full pass
+npm run label:prod
+```
+
+You can also trigger labeling from **Wellness Chatbot → Settings → Catalogue**
+in WordPress (tick "Also run AI labeling" on the upload form), without touching
+a terminal.
 
 A long labeling run can outlive a browser-based terminal session. For a large
 catalogue, prefer SSH:
@@ -347,7 +367,9 @@ Otherwise hit **Redeploy**.
 
 Deployments are safe with respect to your data: the database lives on the
 mounted volume, not in the image, and the schema migrates itself on start.
-Verified products are never touched by a redeploy or a re-sync.
+Verified products are never touched by a redeploy, and a re-import never
+overwrites a product a human has already approved — only the raw
+WooCommerce-owned fields (price, stock, description) get refreshed.
 
 If you change the widget, rebuild it and re-upload the plugin — the widget ships
 inside the plugin, not the container:
@@ -392,8 +414,13 @@ differ. They must be byte-identical.
 The two servers' clocks differ by more than five minutes. Install `chrony` or
 `systemd-timesyncd` on the Coolify host.
 
-**`npm run seed` fails in the Coolify terminal**
-Use `npm run seed:prod`. The production image has no `tsx`.
+**`npm run seed` (or `import`, or `label`) fails in the Coolify terminal**
+Use the `:prod` variant. The production image has no `tsx`.
+
+**`npm run import:prod` says the file was not found**
+The container's filesystem is separate from your local machine and from
+WordPress. If you're driving this from the CLI rather than the WordPress
+upload form, `docker cp` the file in first — see Part 7.
 
 **"Model not found" in the logs**
 An OpenAI model ID was retired. Update the `OPENAI_MODEL_*` environment
@@ -405,8 +432,12 @@ variables and redeploy — no code change needed.
 
 **Verified by actually running it:** the image builds on Node 24; the container
 starts and serves `/health`; the Docker health check passes; the compiled CLI
-(`seed:prod`) runs inside the image; and seeded data survives a container
-restart through the mounted volume.
+(`seed:prod`, `import:prod`) runs inside the image; a catalogue file imported
+inside a running container shows up correctly via `/health`; re-importing the
+same file is idempotent (no duplicates) and never resets a product a human
+already marked `verified`; `--prune` correctly removes products missing from
+the file while leaving verification decisions on the survivors untouched; and
+all of this survives a container restart through the mounted volume.
 
 **Not verified here:** the Coolify GUI steps themselves — those are written from
 Coolify's documented behaviour, and field names may shift slightly between

@@ -73,8 +73,6 @@ export const config = {
   wordpress: {
     baseUrl: optional('WP_BASE_URL', '').replace(/\/+$/, ''),
     sharedSecret: optional('WP_SHARED_SECRET'),
-    wcConsumerKey: optional('WC_CONSUMER_KEY'),
-    wcConsumerSecret: optional('WC_CONSUMER_SECRET'),
   },
 
   labeling: {

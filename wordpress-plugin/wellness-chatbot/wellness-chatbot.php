@@ -71,6 +71,12 @@ register_activation_hook(
 		require_once WWC_PATH . 'includes/class-wwc-roles.php';
 		WWC_Roles::add_capabilities();
 
+		// The queue's cron drain needs its schedule registered before the event
+		// itself can be scheduled.
+		require_once WWC_PATH . 'includes/class-wwc-queue.php';
+		add_filter( 'cron_schedules', array( 'WWC_Queue', 'register_schedule' ) ); // phpcs:ignore WordPress.WP.CronInterval.CronSchedulesInterval
+		WWC_Queue::schedule_cron();
+
 		// The backend is where secrets live; surface a setup reminder rather
 		// than guessing a URL or generating a secret the admin cannot see.
 		if ( ! get_option( 'wwc_setup_complete' ) ) {
@@ -83,6 +89,17 @@ register_activation_hook(
 register_deactivation_hook(
 	__FILE__,
 	function () {
+		require_once WWC_PATH . 'includes/class-wwc-queue.php';
+		WWC_Queue::unschedule_cron();
 		flush_rewrite_rules();
 	}
 );
+
+/**
+ * `wp wellness-chatbot export` — lets the catalogue export run from the
+ * command line, spending no web-server request budget. Registered only under
+ * WP-CLI: WWC_CLI extends WP_CLI_Command, which does not exist outside it.
+ */
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	WP_CLI::add_command( 'wellness-chatbot', 'WWC_CLI' );
+}

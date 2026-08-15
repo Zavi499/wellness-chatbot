@@ -14,8 +14,8 @@ import { reindexKbEntry, reindexProducts } from '../search/embeddings.js';
 import { listEscalations, resolveEscalation } from '../safety/engine.js';
 import { kpiSummary, auditTrail } from '../analytics/audit.js';
 import { getSettings, setSettings, missingSettings, type SettingKey } from '../settings/repository.js';
-import { backfillCatalogue } from '../products/woocommerce.js';
-import { countProducts, getProduct } from '../products/repository.js';
+import { normalizeWooProduct, type WooRawProduct } from '../products/normalize.js';
+import { allProducts, countProducts, deleteProduct, getProduct, upsertWooFields } from '../products/repository.js';
 import { loadAllQuestionnaires, saveQuestionnaire, type QuestionnaireId } from '../questionnaire/loader.js';
 import { vectorCount } from '../search/vector.js';
 
@@ -188,17 +188,63 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
-  // --- Maintenance jobs -----------------------------------------------------
-  app.post('/api/admin/sync', async (request) => {
-    const body = (request.body ?? {}) as { reindex?: boolean; label?: boolean; limit?: number };
-    const synced = await backfillCatalogue();
-    const result: Record<string, unknown> = { synced };
+  // --- Catalogue import (spec: no REST pull — the site pushes a file) -------
+  //
+  // Replaces the old /api/admin/sync, which pulled the whole catalogue over
+  // the WooCommerce REST API. On constrained hosting that pull, stacked on top
+  // of the per-product webhook push that was already happening, meant every
+  // edit cost two full WordPress + WooCommerce boots. Import instead accepts
+  // data the site (or a local file, via `npm run import:prod`) sends it.
+  //
+  // Two calls: POST chunks of products to /import, then one call to /finish to
+  // rebuild the search index and, optionally, prune anything not in the file.
+  app.post(
+    '/api/admin/catalogue/import',
+    { bodyLimit: 10 * 1024 * 1024 },
+    async (request, reply) => {
+      const body = (request.body ?? {}) as { products?: WooRawProduct[] };
+      if (!Array.isArray(body.products) || body.products.length === 0) {
+        return reply.code(400).send({ error: 'products must be a non-empty array' });
+      }
+
+      let upserted = 0;
+      for (const product of body.products) {
+        if (!product.id || !product.name) continue;
+        upsertWooFields(normalizeWooProduct(product));
+        upserted += 1;
+      }
+
+      return { ok: true, upserted, skipped: body.products.length - upserted };
+    },
+  );
+
+  app.post('/api/admin/catalogue/finish', async (request) => {
+    const body = (request.body ?? {}) as {
+      reindex?: boolean;
+      label?: boolean;
+      limit?: number;
+      prune?: boolean;
+      product_ids?: number[];
+    };
+    const result: Record<string, unknown> = {};
+
+    if (body.prune) {
+      // Anything in the local mirror that wasn't in the uploaded file has
+      // presumably been deleted or unpublished on the site since the last
+      // import, and should stop being recommendable.
+      const keep = new Set(body.product_ids ?? []);
+      const toRemove = allProducts()
+        .map((p) => p.product_id)
+        .filter((id) => !keep.has(id));
+      for (const id of toRemove) deleteProduct(id);
+      result.pruned = toRemove.length;
+    }
 
     if (body.reindex) result.embedded = await reindexProducts();
     if (body.label) result.labeling = await labelCatalogue({ skipQueued: true, limit: body.limit });
 
-    request.log.info({ result }, 'Catalogue sync finished');
-    return { ok: true, ...result };
+    request.log.info({ result }, 'Catalogue import finished');
+    return { ok: true, ...result, products: countProducts() };
   });
 
   app.get('/api/admin/status', async () => ({

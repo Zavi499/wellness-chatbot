@@ -2,9 +2,11 @@
 /**
  * WooCommerce product change notifications (spec §1.2, §10).
  *
- * Fires a signed, non-blocking webhook to the backend so the chatbot's mirror
- * and vector index stay current. Saving a product in wp-admin is never slowed
- * down waiting for the chatbot.
+ * Saving a product enqueues its id (WWC_Queue) rather than pushing
+ * immediately — no HTTP happens during the save itself. The queue flushes as
+ * one batched request at the end of the request, or via cron for a large
+ * backlog. Stock changes and deletions stay immediate: they carry no product
+ * data, so a single small push costs almost nothing.
  *
  * @package WellnessChatbot
  */
@@ -44,17 +46,18 @@ class WWC_Webhooks {
 		}
 		set_transient( 'wwc_sync_' . $product_id, $fingerprint, 60 );
 
-		WWC_Backend_Client::notify(
-			self::ENDPOINT,
-			array(
-				'action'  => 'updated',
-				'id'      => $product_id,
-				// Ask the backend to re-run AI labeling only when the owner opted
-				// in — otherwise a bulk price edit would trigger catalogue-wide
-				// model spend.
-				'relabel' => WWC_Settings::relabel_on_save(),
-			)
-		);
+		if ( 'publish' !== $product->get_status() ) {
+			// A draft/private/pending product has nothing to recommend — if it
+			// was previously live, tell the backend to stop showing it. This is
+			// cheap (no product data) so it stays an immediate push.
+			WWC_Backend_Client::notify( self::ENDPOINT, array( 'action' => 'deleted', 'id' => $product_id ) );
+			return;
+		}
+
+		// Full data is queued, not pushed here — see WWC_Queue. This is what
+		// turns a bulk edit of hundreds of products into a handful of requests
+		// instead of one per product.
+		WWC_Queue::enqueue( $product_id );
 	}
 
 	/**

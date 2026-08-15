@@ -13,12 +13,12 @@
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test test/*.test.ts",
-    "sync": "tsx src/cli/sync.ts",
+    "import": "tsx src/cli/import.ts",
     "label": "tsx src/cli/label.ts",
     "seed": "tsx src/cli/seed.ts",
     "//": "The :prod variants run the compiled CLI. Use these inside a container — the image has no tsx and no src/.",
     "seed:prod": "node dist/cli/seed.js",
-    "sync:prod": "node dist/cli/sync.js",
+    "import:prod": "node dist/cli/import.js",
     "label:prod": "node dist/cli/label.js"
   },
   "dependencies": {

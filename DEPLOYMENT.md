@@ -24,8 +24,15 @@ You need:
 | **Node.js 22.5 or newer** | The service uses Node's built-in SQLite | `node -v` must be ≥ 22.5. Node 24 LTS recommended. |
 | An OpenAI API key with billing enabled | Chat, labeling, embeddings | Lives only on the backend server. |
 | WordPress 6.0+ with WooCommerce, PHP 8.0+ | The store | Existing live store is fine. |
-| Admin access to WordPress | Install the plugin, create API keys | |
+| Admin access to WordPress | Install the plugin, assign roles | |
 | A subdomain + TLS certificate | e.g. `chatbot.wellnesspharmacykw.com` | The widget will not work over plain HTTP on an HTTPS store. |
+
+**The backend never connects to your website.** There is no WooCommerce REST
+client in this codebase and nothing to authenticate it with — product data
+only ever arrives by push (the plugin queues and forwards it after a save) or
+by file (Part 3.3). This matters most on shared/constrained hosting: pulling
+the catalogue over the REST API used to cost a second full WordPress +
+WooCommerce boot for every product a webhook had already pushed once.
 
 **Do a staging run first.** Point the backend at a staging copy of the store,
 run the labeling pass, and look at the results before touching production.
@@ -46,17 +53,7 @@ npm install --omit=dev
 If you are copying files rather than cloning, copy the whole project directory
 and run `npm install --omit=dev` inside `backend/`.
 
-## 1.2 Create the WooCommerce API keys
-
-In WordPress: **WooCommerce → Settings → Advanced → REST API → Add key**
-
-- Description: `Wellness Chatbot`
-- User: an administrator account
-- Permissions: **Read** (read-only — the chatbot never writes to your store)
-
-Copy the Consumer Key and Consumer Secret now. WooCommerce shows them once.
-
-## 1.3 Generate the shared secret
+## 1.2 Generate the shared secret
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -65,7 +62,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 Save the output. The same value goes in two places: the backend `.env` and
 WordPress's `wp-config.php`. It is what proves a request came from your store.
 
-## 1.4 Configure
+## 1.3 Configure
 
 ```bash
 cp .env.example .env
@@ -77,9 +74,7 @@ Fill in at minimum:
 ```ini
 OPENAI_API_KEY=sk-...
 WP_BASE_URL=https://www.wellnesspharmacykw.com
-WP_SHARED_SECRET=<the secret from 1.3>
-WC_CONSUMER_KEY=ck_...
-WC_CONSUMER_SECRET=cs_...
+WP_SHARED_SECRET=<the secret from 1.2>
 DATABASE_PATH=/opt/wellness-chatbot/data/wellness-chatbot.db
 PORT=8787
 NODE_ENV=production
@@ -108,7 +103,7 @@ Lock the file down:
 chmod 600 .env
 ```
 
-## 1.5 Build and seed
+## 1.4 Build and seed
 
 ```bash
 npm run build
@@ -120,7 +115,7 @@ brand spellings) and creates ~18 FAQ topics with **empty, unapproved answers**.
 That is deliberate — the build does not invent your store's delivery fees or
 returns policy. You write those in Part 3.
 
-## 1.6 Start it
+## 1.5 Start it
 
 ```bash
 npm start
@@ -157,7 +152,7 @@ You will see a notice saying it is not connected yet. Correct so far.
 Above the `/* That's all, stop editing! */` line:
 
 ```php
-define( 'WELLNESS_CHATBOT_SECRET', 'the-same-secret-from-step-1.3' );
+define( 'WELLNESS_CHATBOT_SECRET', 'the-same-secret-from-step-1.2' );
 define( 'WELLNESS_CHATBOT_BACKEND_URL', 'https://chatbot.wellnesspharmacykw.com' );
 ```
 
@@ -223,26 +218,46 @@ rather than guessing.
 **Have the Arabic reviewed by a fluent speaker.** The seeded Arabic in this build
 is a working draft, not launch copy.
 
-## 3.3 Sync the catalogue
+## 3.3 Load the catalogue
 
-Two ways:
+There is no "sync from WooCommerce" button — the backend cannot reach your
+site, by design. Three equivalent ways to load it, pick whichever fits:
 
-**From WordPress** — **Wellness Chatbot → Settings → Maintenance**, tick
-"Rebuild the search index afterwards", click **Sync catalogue from WooCommerce**.
+**From WordPress** (simplest) — **Wellness Chatbot → Settings → Catalogue**:
+click **Export catalogue** to download a file, then **Upload catalogue** to
+send that same file back. It uploads in batches of 100 products, so even a
+large catalogue is never one huge request.
 
-**From the server** (better for the first run, since you see progress):
+**From the command line, no web request at all** (best for a first load on
+tight hosting — this runs via WP-CLI, so it costs nothing on the web server):
+
+```bash
+wp wellness-chatbot export --file=/tmp/catalogue.json
+```
+
+Copy the resulting file to the backend server (`scp` works fine), then:
 
 ```bash
 cd /opt/wellness-chatbot/backend
-npm run sync -- --embed
+npm run import -- --file /tmp/catalogue.json --embed
 ```
 
-This pulls every published product and builds the search index. Expect roughly a
-minute per thousand products.
+**Both produce the same result** — every published product, normalized and
+embedded for search. Expect the WordPress-side export itself to take a few
+seconds per hundred products (it reads your own product list directly, the
+same way the admin product screen does — nothing like the cost of hundreds of
+authenticated API calls).
 
 **Check:** the Settings screen should now say *"Connected. N products synced,
 0 recommendable, N search vectors."* Zero recommendable is correct — nothing is
 verified yet. That is Part 6.
+
+After this first load, day-to-day changes take care of themselves: saving a
+product in wp-admin queues it automatically and it reaches the backend within
+moments, with no REST call in either direction. Re-run an export/upload only
+if you ever suspect the two have drifted out of sync — tick **Remove products
+the backend has that this file does not** to also clean up anything deleted
+while the backend was unreachable.
 
 ## 3.4 Turn on the widget
 
@@ -313,7 +328,7 @@ server {
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # A labeling run through the admin sync button can take a while.
+        # A catalogue upload or a labeling run can take a while.
         proxy_read_timeout 300s;
     }
 }
@@ -356,10 +371,11 @@ EOF
 sudo chmod +x /etc/cron.daily/wellness-chatbot-backup
 ```
 
-**This matters.** Products can be re-synced from WooCommerce any time. What
-cannot be regenerated is in this file: every verification decision your
-pharmacist made, the FAQ answers, the escalation log, and the analytics history.
-Losing it means re-reviewing the whole catalogue by hand.
+**This matters.** Raw product data can be re-exported from WordPress and
+re-imported any time (Part 3.3). What cannot be regenerated is in this file:
+every verification decision your pharmacist made, the FAQ answers, the
+escalation log, and the analytics history. Losing it means re-reviewing the
+whole catalogue by hand.
 
 ## 4.5 Updating later
 
@@ -371,7 +387,9 @@ sudo systemctl restart wellness-chatbot
 ```
 
 The database migrates itself on start. Verified products are not touched by
-updates or re-syncs.
+updates, and a re-import never overwrites a product a human has already
+approved — only the raw WooCommerce-owned fields (price, stock, description)
+get refreshed.
 
 If the widget changed:
 
@@ -619,12 +637,13 @@ pharmacist's work.
 
 # Part 7 — Keeping it current
 
-Once running, the plugin notifies the backend automatically when a product is
-created, updated, deleted, trashed, or changes stock status. These calls are
-non-blocking, so saving a product in wp-admin is never slowed down.
-
-Stock changes propagate within seconds, so an out-of-stock product stops being
-recommended almost immediately.
+Once running, saving a product just queues its id — no request happens during
+the save itself. That queue flushes as one batched push moments later (after
+the page has already loaded), or via a background job every five minutes if
+a lot of products changed at once — a 500-product bulk edit becomes a handful
+of requests, not 500. Stock changes and deletions carry no product data, so
+those still go out immediately; an out-of-stock product stops being
+recommended within seconds either way.
 
 What still needs a human, on a schedule:
 

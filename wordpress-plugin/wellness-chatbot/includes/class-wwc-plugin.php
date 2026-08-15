@@ -28,6 +28,7 @@ class WWC_Plugin {
 		WWC_Meta::init();
 		WWC_Roles::init();
 		WWC_Rest::init();
+		WWC_Queue::init();
 		WWC_Webhooks::init();
 		WWC_Widget::init();
 

@@ -18,6 +18,7 @@ import {
 import { detectByScript } from '../src/language/detect.js';
 import { expandQuery, normalizeArabic, normalizeQuery, keywordScore } from '../src/search/normalize.js';
 import { sign, verifySignature, issueSessionToken, verifySessionToken } from '../src/security/hmac.js';
+import { resolvePushedProducts } from '../src/routes/webhooks.js';
 import { cosine } from '../src/search/vector.js';
 
 describe('questionnaire config (§4.4)', () => {
@@ -213,6 +214,30 @@ describe('search normalization (§6.3)', () => {
     const relevant = keywordScore(query, 'Sunscreen SPF 50 for oily skin, matte finish');
     const irrelevant = keywordScore(query, 'Nourishing hair mask for dry ends');
     assert.ok(relevant > irrelevant);
+  });
+});
+
+describe('product push validation (no REST fallback)', () => {
+  test('a batch payload resolves to its products array', () => {
+    const products = [{ id: 1, name: 'A' }, { id: 2, name: 'B' }];
+    assert.deepEqual(resolvePushedProducts({ action: 'updated', products } as never), products);
+  });
+
+  test('a single inlined product resolves to a one-item array', () => {
+    const result = resolvePushedProducts({ action: 'updated', id: 5, name: 'Solo product' } as never);
+    assert.deepEqual(result, [{ action: 'updated', id: 5, name: 'Solo product' }]);
+  });
+
+  test('an id with no product data is rejected, not treated as a reason to fetch', () => {
+    assert.equal(resolvePushedProducts({ action: 'updated', id: 42 } as never), null);
+  });
+
+  test('an empty products array is rejected', () => {
+    assert.equal(resolvePushedProducts({ action: 'updated', products: [] } as never), null);
+  });
+
+  test('an entirely empty body is rejected', () => {
+    assert.equal(resolvePushedProducts({} as never), null);
   });
 });
 

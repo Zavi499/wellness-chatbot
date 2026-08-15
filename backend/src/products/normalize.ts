@@ -1,11 +1,20 @@
 /**
- * WooCommerce REST client + normalizer.
+ * WooCommerce product shape + normalizer.
  *
- * WooCommerce stays the system of record. This module pulls product data in
- * (full backfill or a single product after a webhook) and normalizes it into
- * the shape `products/repository.ts` stores.
+ * The backend never calls the website. Product data arrives two ways, and both
+ * funnel through `normalizeWooProduct()` so there is exactly one place that
+ * knows how a `WooRawProduct` becomes a stored row:
+ *
+ *   - live pushes: the WordPress plugin's queue POSTs this shape on save
+ *     (routes/webhooks.ts)
+ *   - bulk load: the plugin's exporter writes an array of this shape to a
+ *     file, which `cli/import.ts` or `/api/admin/catalogue/import` reads
+ *
+ * Previously this module also pulled data itself over the WooCommerce REST
+ * API. That path is gone — on constrained hosting, every pull was a second
+ * full WordPress + WooCommerce boot on top of the push that triggered it.
+ * Traffic is now one-directional: WordPress → backend, never the reverse.
  */
-import { config } from '../config.js';
 import { upsertWooFields } from './repository.js';
 import type { Product } from '../types.js';
 
@@ -31,53 +40,6 @@ export interface WooRawProduct {
   meta_data?: { key: string; value: unknown }[];
   weight?: string;
   dimensions?: { length?: string; width?: string; height?: string };
-}
-
-function authHeader(): string {
-  const { wcConsumerKey, wcConsumerSecret } = config.wordpress;
-  return 'Basic ' + Buffer.from(`${wcConsumerKey}:${wcConsumerSecret}`).toString('base64');
-}
-
-function requireWooCredentials(): void {
-  if (!config.wordpress.baseUrl) throw new Error('WP_BASE_URL is not configured.');
-  if (!config.wordpress.wcConsumerKey || !config.wordpress.wcConsumerSecret) {
-    throw new Error('WC_CONSUMER_KEY / WC_CONSUMER_SECRET are not configured.');
-  }
-}
-
-async function wooGet<T>(pathname: string, params: Record<string, string | number> = {}): Promise<T> {
-  requireWooCredentials();
-  const url = new URL(`${config.wordpress.baseUrl}/wp-json/wc/v3${pathname}`);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
-
-  const res = await fetch(url, { headers: { Authorization: authHeader(), Accept: 'application/json' } });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`WooCommerce GET ${pathname} failed: ${res.status} ${res.statusText} ${body.slice(0, 300)}`);
-  }
-  return (await res.json()) as T;
-}
-
-export async function fetchProduct(productId: number): Promise<WooRawProduct> {
-  return wooGet<WooRawProduct>(`/products/${productId}`);
-}
-
-/** Pulls the whole catalogue, one page at a time. */
-export async function* iterateProducts(perPage = 50): AsyncGenerator<WooRawProduct[]> {
-  let page = 1;
-  for (;;) {
-    const batch = await wooGet<WooRawProduct[]>('/products', {
-      per_page: perPage,
-      page,
-      status: 'publish',
-      orderby: 'id',
-      order: 'asc',
-    });
-    if (!Array.isArray(batch) || batch.length === 0) return;
-    yield batch;
-    if (batch.length < perPage) return;
-    page += 1;
-  }
 }
 
 function toNumber(v: unknown): number | null {
@@ -151,25 +113,4 @@ export function normalizeWooProduct(raw: WooRawProduct): Parameters<typeof upser
     rating_average: toNumber(raw.average_rating),
     rating_count: Number(raw.rating_count ?? 0),
   };
-}
-
-/** Full-catalogue backfill (roadmap phase 2). Returns the number synced. */
-export async function backfillCatalogue(
-  onBatch?: (count: number, total: number) => void,
-): Promise<number> {
-  let total = 0;
-  for await (const batch of iterateProducts()) {
-    for (const raw of batch) {
-      upsertWooFields(normalizeWooProduct(raw));
-      total += 1;
-    }
-    onBatch?.(batch.length, total);
-  }
-  return total;
-}
-
-export async function syncSingleProduct(productId: number): Promise<Product['product_id']> {
-  const raw = await fetchProduct(productId);
-  upsertWooFields(normalizeWooProduct(raw));
-  return raw.id;
 }

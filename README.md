@@ -39,22 +39,29 @@ questionnaires — ship without a plugin release.
 cd backend && npm install && cp .env.example .env
 ```
 
-Fill in `.env`: `OPENAI_API_KEY`, `WP_BASE_URL`, `WP_SHARED_SECRET`, and a
-WooCommerce read-only key pair. Generate the shared secret with:
+Fill in `.env`: `OPENAI_API_KEY`, `WP_BASE_URL`, `WP_SHARED_SECRET`. Generate
+the shared secret with:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Then seed, sync and start:
+Then seed and start:
 
 ```bash
-cd backend && npm run seed && npm run sync -- --embed && npm run dev
+cd backend && npm run seed && npm run dev
 ```
 
 `npm run seed` loads the bilingual lexicon and creates the FAQ topic list with
 **empty, unapproved answers** — those are for the store owner to write, not for
 this build to invent.
+
+**The backend never connects to your WooCommerce store.** There is no REST
+client and no WooCommerce API keys anywhere in this codebase — product data
+only ever arrives by push (the plugin's save queue) or by file (Part 3 below).
+This is deliberate: pulling the catalogue over the REST API meant every
+product save cost a second full WordPress + WooCommerce boot, which is exactly
+the load this design avoids on constrained hosting.
 
 ### 2. WordPress plugin
 
@@ -70,7 +77,19 @@ define( 'WELLNESS_CHATBOT_BACKEND_URL', 'https://chatbot.example.com' );
 Go to **Wellness Chatbot → Settings**, fill in the business facts, and assign
 at least one user the **Pharmacist Reviewer** role.
 
-### 3. Label the catalogue
+### 3. Load the catalogue
+
+Product data arrives by push after this point — every product save
+automatically queues and forwards itself. For the first load, use
+**Wellness Chatbot → Settings → Catalogue**: **Export catalogue** downloads a
+file, **Upload catalogue** sends it to the backend in batches. Or, from the
+backend server directly:
+
+```bash
+cd backend && npm run import -- --file ./catalogue.json --embed
+```
+
+### 4. Label the catalogue
 
 ```bash
 cd backend && npm run label -- --limit 25
@@ -80,7 +99,7 @@ Start with a limit to see the cost and quality, then run the full pass. Every
 draft lands in **Wellness Chatbot → AI Label Review Queue** as `unverified`.
 Nothing reaches a customer until a human approves it.
 
-### 4. Widget
+### 5. Widget
 
 The bundle is already built and committed into the plugin. To change it:
 
@@ -122,9 +141,9 @@ These come from the spec and are enforced in code, not just in prompts:
 | Command | What it does |
 | --- | --- |
 | `npm run dev` (backend) | Start with reload |
-| `npm test` (backend) | 83 tests — safety triggers, scoring, eligibility, questionnaire, bilingual, signing |
+| `npm test` (backend) | 88 tests — safety triggers, scoring, eligibility, questionnaire, bilingual, signing, push validation |
 | `npm run seed` | Lexicon + FAQ topic skeleton |
-| `npm run sync -- --embed` | Pull the catalogue from WooCommerce and build embeddings |
+| `npm run import -- --file <path> --embed` | Load a catalogue export and build embeddings |
 | `npm run label -- --limit N` | AI auto-labeling pass |
 | `npm run build` (widget) | Rebuild the storefront bundle into the plugin |
 

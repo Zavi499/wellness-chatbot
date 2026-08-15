@@ -35,6 +35,7 @@ lifecycle; and the parts that will change weekly ship without a plugin release.
 | SQLite + `sqlite-vec` | Node's built-in `node:sqlite`, Float32 BLOBs, cosine in process | No native build step on the host. At a few thousand SKUs this is sub-millisecond. `search/vector.ts` is the only file to change if the catalogue outgrows it. |
 | Redis for sessions | A `sessions` table in the same SQLite file | Avoids a second service for a single-country store. Same TTL semantics. |
 | Node 20+ | Node 22.5+ | Required by `node:sqlite`. Documented in `package.json` `engines`. |
+| Backend pulls the catalogue via WooCommerce REST | Backend has no REST client at all; WordPress pushes | The original design (`products/woocommerce.ts`, since removed) pulled products on every webhook that lacked a full payload, meaning each save cost a second full WordPress + WooCommerce boot to service the pull — untenable on constrained/shared hosting. Traffic is now strictly one-directional: the plugin's queue (`WWC_Queue`) batches full product data on save, and the initial/bulk load is a file (`WWC_Exporter` → `/api/admin/catalogue/import`), not an API pull. `products/normalize.ts` is the one place a `WooRawProduct` becomes a stored row, regardless of which path delivered it. |
 
 ---
 
@@ -183,7 +184,11 @@ it before launch (launch checklist).
 | `class-wwc-roles.php` | `wwc_pharmacist_review` / `wwc_manage_chatbot` |
 | `class-wwc-meta.php` | `_wwc_*` schema + the verification gate |
 | `class-wwc-rest.php` | Widget proxy endpoints |
-| `class-wwc-webhooks.php` | WooCommerce product/stock notifications |
+| `class-wwc-webhooks.php` | Save/stock/delete hooks — queues on save, pushes immediately for stock/delete |
+| `class-wwc-queue.php` | The save queue: batches on `shutdown`, drains a backlog via cron |
+| `class-wwc-product-payload.php` | The one place a `WC_Product` becomes the shape the backend expects |
+| `class-wwc-exporter.php` | Bulk catalogue export (`wc_get_products`, not REST) |
+| `class-wwc-cli.php` | `wp wellness-chatbot export` |
 | `class-wwc-widget.php` | Shortcode, launcher, enqueue, bilingual chrome |
 | `class-wwc-brand.php` | Brand ramp (primary `#9322AA`) |
 | `admin/*.php` | The six admin screens (§8) |
@@ -192,9 +197,14 @@ Administrators get `wwc_manage_chatbot` on activation but **not**
 `wwc_pharmacist_review` — that has to be a deliberate grant, not an accident of
 being an admin.
 
-Webhooks are non-blocking, so saving a product in wp-admin is never slowed by
-the chatbot. Re-labeling on save is opt-in, because a bulk price edit would
-otherwise trigger catalogue-wide model spend.
+Saving a product no longer makes an HTTP request at all — it only enqueues an
+id (`WWC_Queue`). The queue flushes as one batched push on `shutdown` if it's
+small, or via a five-minute cron drain if a bulk edit left a large backlog, so
+saving a product in wp-admin is never slowed by the chatbot even in aggregate.
+Stock changes and deletions still push immediately — they carry no product
+data, so a single small request costs almost nothing. Re-labeling on save is
+opt-in, because a bulk price edit would otherwise trigger catalogue-wide model
+spend.
 
 ---
 
@@ -225,7 +235,7 @@ endpoint; the backend never touches cart state.
 cd backend && npm test
 ```
 
-83 tests, no network or API key required:
+88 tests, no network or API key required:
 
 - **Safety** — every §5.1 and §5.2 trigger in both languages, emergency
   precedence, false-positive checks on ordinary shopping questions, sensitive
@@ -235,7 +245,9 @@ cd backend && npm test
   card labels.
 - **Conversation** — questionnaire validation, never-ask-twice, branch
   conditions, questionnaire escalation rules, language detection, Arabic
-  normalization and synonyms, HMAC signing and replay rejection.
+  normalization and synonyms, HMAC signing and replay rejection, product push
+  validation (a payload naming a product without describing it is rejected,
+  not treated as a reason to fetch it).
 
 ---
 
