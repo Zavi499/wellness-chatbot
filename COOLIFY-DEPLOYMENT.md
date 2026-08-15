@@ -102,7 +102,7 @@ redeploy.**
 
 Coolify containers are replaced on each deployment. The chatbot keeps its
 database in a single SQLite file, and that file holds things that cannot be
-regenerated from WooCommerce: every verification decision your pharmacist made,
+regenerated from WooCommerce: every verification decision your reviewers made,
 your FAQ answers, the escalation log, and your analytics history.
 
 1. Open the application → **Storages** tab.
@@ -252,13 +252,15 @@ define( 'WELLNESS_CHATBOT_SECRET', 'the-same-secret-from-part-4' );
 define( 'WELLNESS_CHATBOT_BACKEND_URL', 'https://chatbot.yourstore.com' );
 ```
 
-### 6.3 Assign the pharmacist reviewer
+### 6.3 Assign the pharmacist reviewer (optional)
 
 **Users → (the pharmacist) → Role → Pharmacist Reviewer**
 
-Until someone holds this role, no supplement or health-related product can ever
-be verified, and the assistant will refuse to recommend any of them. This is
-deliberate.
+Any admin can approve any product, including supplements and health-related
+items — this role isn't required. Assigning it just makes `verified_by_pharmacist`
+an honest record for whoever actually has that background, used as a small
+scoring bonus for child-suitable products. Skip this step if nobody on the
+team holds that role.
 
 ### 6.4 Fill in the business facts
 

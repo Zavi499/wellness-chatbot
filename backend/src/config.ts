@@ -86,15 +86,6 @@ export const config = {
 
   recommendations: {
     allowPartialVerification: bool('ALLOW_PARTIAL_VERIFICATION', true),
-    /**
-     * Off by default, deliberately. When on, any admin — not only a user
-     * holding the Pharmacist Reviewer capability — can approve a product
-     * flagged `requires_pharmacist_review` (vitamins, and anything touching
-     * pregnancy/children/medicines). `verified_by_pharmacist` is never set
-     * true for that approval regardless — this flag changes who is allowed
-     * to approve, not what the audit trail honestly records happened.
-     */
-    allowNonPharmacistApproval: bool('ALLOW_NON_PHARMACIST_APPROVAL', false),
   },
 } as const;
 

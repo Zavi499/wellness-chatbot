@@ -160,18 +160,22 @@ This is better than typing the secret into the settings screen, because it keeps
 it out of the database. If you cannot edit `wp-config.php`, the settings screen
 has fields for both — the plugin will tell you which it is using.
 
-## 2.3 Assign the pharmacist reviewer
+## 2.3 Assign the pharmacist reviewer (optional)
 
 **Users → (choose the pharmacist) → Role → Pharmacist Reviewer**
 
-This matters more than it looks. Until someone holds this role:
+Any admin can approve any product in the Label Review Queue, including
+supplements and anything mentioning pregnancy, breastfeeding, children or
+medicines — this role is not required to verify products or to get the
+assistant recommending them.
 
-- No supplement or vitamin can ever be marked verified
-- No product mentioning pregnancy, breastfeeding, children or medicines can be verified
-- The assistant will therefore refuse to recommend any of them
+What this role does do: an approval by a user holding it sets
+`verified_by_pharmacist = true`, an honest record used as a small scoring
+bonus for child-suitable products (§4.6). If nobody on the team has a
+pharmacy background, it's fine to skip this step.
 
-Administrators do **not** get this capability automatically. That is intentional
-— it has to be a decision, not a side effect of being an admin. If the store
+Administrators do **not** get this capability automatically — that keeps the
+record meaningful rather than defaulting true for every admin. If the store
 owner is also the pharmacist, give their account the role explicitly.
 
 ---
@@ -373,7 +377,7 @@ sudo chmod +x /etc/cron.daily/wellness-chatbot-backup
 
 **This matters.** Raw product data can be re-exported from WordPress and
 re-imported any time (Part 3.3). What cannot be regenerated is in this file:
-every verification decision your pharmacist made, the FAQ answers, the
+every verification decision your reviewers made, the FAQ answers, the
 escalation log, and the analytics history. Losing it means re-reviewing the
 whole catalogue by hand.
 
@@ -515,13 +519,15 @@ Three rules are enforced in code, not just asked for in the prompt:
    produces a thin draft — by design.
 2. **Every draft is `unverified`.** The pipeline is structurally incapable of
    marking anything verified. Only a human action can do that.
-3. **The pharmacist gate fires automatically.** Any product in Vitamins &
+3. **Sensitive products are flagged automatically.** Any product in Vitamins &
    Wellness, or whose text mentions pregnancy, breastfeeding, infants, children,
-   or medicines, is flagged so only a Pharmacist Reviewer can verify it.
+   or medicines, is marked so a reviewer knows to look closer — any admin may
+   still approve it, this is informational, not a requirement.
 
 Supplements get an extra instruction: never infer dosage safety, upper limits, or
 interactions. Serving size and amounts are copied exactly as printed, or left
-null. Those fields are for a pharmacist to complete.
+null. Those fields are worth a pharmacist's eye if one is available, but any
+reviewer can fill them in from the manufacturer leaflet.
 
 ## 6.2 Run a trial batch first
 
@@ -533,8 +539,8 @@ npm run label -- --limit 25
 ```
 
 You will see per-product progress with the resolved category, confidence, and a
-`[pharmacist]` marker where the gate fired. At the end it reminds you that
-everything is unverified.
+`[pharmacist]` marker where the extra-care flag fired. At the end it reminds
+you that everything is unverified.
 
 Now open **Wellness Chatbot → AI Label Review Queue** and read those 25. If the
 drafts are mostly empty, the problem is your product descriptions (see 5.2), not
@@ -598,14 +604,15 @@ comma-separated.
 Add a review note when you check against a manufacturer leaflet. It goes into the
 audit trail, which is what **Version History** shows.
 
-### The pharmacist gate in practice
+### Pharmacist-flagged products in practice
 
-A product marked *"Pharmacist review required"* shows a disabled **Approve as
-verified** button for anyone without the role. If you have the role and it is
-still disabled, you are logged in as a different user.
-
-This is checked in three places — the button, the WordPress capability check, and
-again in the backend. Working around the UI does not work around the gate.
+A product marked *"Touches vitamins/supplements or mentions pregnancy,
+children or medicines"* can still be approved by any admin — the flag is a
+prompt to double-check the draft against a manufacturer leaflet, not a
+restriction on who can click Approve. If you do want an actual pharmacist's
+sign-off on these before they go live, that has to be a team process (route
+the flagged rows to them before anyone clicks Approve) — the software will not
+enforce it for you.
 
 ## 6.5 Practical order of work
 
@@ -617,7 +624,9 @@ You do not need the whole catalogue verified to launch.
 3. Bulk-approve low-risk face and body products as **partial** for coverage.
 4. Leave the long tail unverified. The assistant simply will not offer those
    products — it will not offer them wrongly, which is the point.
-5. Hand the entire Vitamins & Wellness queue to the pharmacist as a single batch.
+5. If someone on the team has a pharmacy background, it's still worth having
+   them approve the Vitamins & Wellness queue specifically — but nothing
+   requires it, and any admin can do it if there's nobody to hand it to.
 
 **Check:** Settings should now show a non-zero "recommendable" count. Open the
 widget, choose Face care, and walk through the questionnaire. You should get up
@@ -676,10 +685,9 @@ first. Also confirm either the floating launcher is on or the shortcode is place
 
 **The assistant will not recommend anything**
 Check the recommendable count in Settings. If it is zero, nothing has been
-approved yet — that is Part 6.4, not a bug.
-
-**It refuses to recommend supplements specifically**
-No Pharmacist Reviewer has verified them. This is the gate working correctly.
+approved yet — that is Part 6.4, not a bug. Any admin can approve, including
+supplements and pregnancy/children/medicine-flagged products — a Pharmacist
+Reviewer is not required.
 
 **"Model not found" in the logs**
 An OpenAI model ID was retired. Update the four `OPENAI_MODEL_*` lines in `.env`

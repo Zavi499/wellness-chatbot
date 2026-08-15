@@ -166,11 +166,9 @@ class WWC_Admin_Settings {
 
 		$pharmacists = WWC_Roles::pharmacists();
 		echo '<h3>' . esc_html__( 'Pharmacist reviewers', 'wellness-chatbot' ) . '</h3>';
+		echo '<p class="description">' . esc_html__( 'Any admin may approve any product, including those flagged for vitamins/supplements or pregnancy/children/medicine content. A Pharmacist Reviewer is not required — this list is informational, so you know who on the team has that background.', 'wellness-chatbot' ) . '</p>';
 		if ( empty( $pharmacists ) ) {
-			printf(
-				'<p class="wwc-flag wwc-flag-warn">%s</p>',
-				esc_html__( 'Nobody holds the Pharmacist Reviewer capability yet. Until someone does, no supplement or pregnancy-related product can be verified, and the assistant will not recommend any of them.', 'wellness-chatbot' )
-			);
+			echo '<p class="description">' . esc_html__( 'Nobody currently holds the Pharmacist Reviewer role.', 'wellness-chatbot' ) . '</p>';
 		} else {
 			echo '<ul class="wwc-list">';
 			foreach ( $pharmacists as $user ) {
@@ -178,47 +176,14 @@ class WWC_Admin_Settings {
 			}
 			echo '</ul>';
 		}
-
-		self::render_pharmacist_gate_state();
-	}
-
-	/**
-	 * Read-only view of ALLOW_NON_PHARMACIST_APPROVAL. This is an env var on
-	 * the backend, not a WordPress option, so it cannot be toggled from here —
-	 * shown only so an admin sees, without needing to ask, why the gate is or
-	 * isn't currently blocking approvals.
-	 */
-	private static function render_pharmacist_gate_state() {
-		if ( ! WWC_Settings::is_connected() ) {
-			return;
-		}
-
-		$status = WWC_Backend_Client::get( '/api/admin/status' );
-		if ( is_wp_error( $status ) || ! isset( $status['allow_non_pharmacist_approval'] ) ) {
-			return;
-		}
-
-		if ( $status['allow_non_pharmacist_approval'] ) {
-			printf(
-				'<p class="wwc-flag wwc-flag-warn">%s</p>',
-				esc_html__( 'Allow non-pharmacist approval is ON (backend env: ALLOW_NON_PHARMACIST_APPROVAL=1). Any admin can approve pharmacist-gated products, not only the reviewers listed above. To turn this off, unset that variable on the backend and restart it.', 'wellness-chatbot' )
-			);
-		} else {
-			printf(
-				'<p class="description">%s</p>',
-				esc_html__( 'Allow non-pharmacist approval is off. Only a Pharmacist Reviewer can approve a gated product. To let any admin approve instead, set ALLOW_NON_PHARMACIST_APPROVAL=1 on the backend and restart it.', 'wellness-chatbot' )
-			);
-		}
 	}
 
 	private static function render_launch_checklist() {
-		$missing     = WWC_Settings::missing_business_fields();
-		$pharmacists = WWC_Roles::pharmacists();
+		$missing = WWC_Settings::missing_business_fields();
 
 		$items = array(
 			array( empty( $missing ), __( 'All business facts confirmed and entered', 'wellness-chatbot' ) ),
 			array( WWC_Settings::is_connected(), __( 'Backend connected', 'wellness-chatbot' ) ),
-			array( ! empty( $pharmacists ), __( 'At least one pharmacist reviewer assigned', 'wellness-chatbot' ) ),
 			array( '' !== WWC_Settings::business_value( 'whatsapp_number' ) || '' !== WWC_Settings::business_value( 'phone_number' ), __( 'Human handover channel configured', 'wellness-chatbot' ) ),
 			array( '' !== WWC_Settings::business_value( 'returns_policy' ), __( 'Returns / exchange / refund policy explicitly confirmed', 'wellness-chatbot' ) ),
 		);

@@ -4,9 +4,9 @@
  *
  * WooCommerce stays the system of record, so the extended fields live as post
  * meta on the `product` post type. `_wwc_verification_status` is registered
- * with an auth callback that refuses `verified` unless the current user holds
- * the pharmacist capability for a flagged product — enforcing the gate at the
- * data layer, not just in the review UI (spec §3.1, §11).
+ * with an auth callback that requires the general catalogue-manage capability
+ * to write it — pharmacist review (`_wwc_requires_pharmacist_review`) is
+ * informational only and never restricts who may verify a product.
  *
  * @package WellnessChatbot
  */
@@ -110,22 +110,26 @@ class WWC_Meta {
 	}
 
 	/**
-	 * The gate: a product flagged for pharmacist review can only be verified by
-	 * a user holding `wwc_pharmacist_review` (spec §3.4).
+	 * Any user who can manage the catalogue may verify any product, including
+	 * one flagged for pharmacist review (vitamins/supplements, and anything
+	 * touching pregnancy/children/medicines) — pharmacist review is
+	 * informational (see `requires_pharmacist_review()`), not a requirement.
 	 *
 	 * @param int $post_id Product ID.
 	 * @return bool
 	 */
 	public static function can_verify( $post_id ) {
-		if ( ! WWC_Roles::can_manage() ) {
-			return false;
-		}
-		if ( self::requires_pharmacist_review( $post_id ) ) {
-			return WWC_Roles::current_user_is_pharmacist();
-		}
-		return true;
+		return WWC_Roles::can_manage();
 	}
 
+	/**
+	 * Whether this product touches a category the labeling pipeline flags for
+	 * extra care (vitamins/supplements, pregnancy/children/medicine mentions).
+	 * Purely informational — shown to the reviewer, never blocks approval.
+	 *
+	 * @param int $post_id Product ID.
+	 * @return bool
+	 */
 	public static function requires_pharmacist_review( $post_id ) {
 		return '1' === (string) get_post_meta( $post_id, '_wwc_requires_pharmacist_review', true );
 	}
@@ -136,28 +140,22 @@ class WWC_Meta {
 	}
 
 	/**
-	 * Writes the verification status, refusing the write when the gate applies.
+	 * Writes the verification status.
 	 *
-	 * @param int    $post_id    Product ID.
-	 * @param string $status     One of the STATUS_* constants.
-	 * @param bool   $skip_gate  Bypass the local pharmacist-only check. Only
-	 *                           pass true when the backend has already
-	 *                           authoritatively approved this write (e.g. under
-	 *                           ALLOW_NON_PHARMACIST_APPROVAL) — this local
-	 *                           gate is a UI convenience, the backend is the
-	 *                           source of truth.
+	 * @param int    $post_id Product ID.
+	 * @param string $status  One of the STATUS_* constants.
 	 * @return true|WP_Error
 	 */
-	public static function set_verification_status( $post_id, $status, $skip_gate = false ) {
+	public static function set_verification_status( $post_id, $status ) {
 		$allowed = array( self::STATUS_VERIFIED, self::STATUS_PARTIAL, self::STATUS_UNVERIFIED, self::STATUS_NEEDS_RX );
 		if ( ! in_array( $status, $allowed, true ) ) {
 			return new WP_Error( 'wwc_bad_status', __( 'Unknown verification status.', 'wellness-chatbot' ) );
 		}
 
-		if ( self::STATUS_VERIFIED === $status && ! $skip_gate && ! self::can_verify( $post_id ) ) {
+		if ( self::STATUS_VERIFIED === $status && ! self::can_verify( $post_id ) ) {
 			return new WP_Error(
-				'wwc_pharmacist_required',
-				__( 'This product needs a pharmacist reviewer to verify it.', 'wellness-chatbot' )
+				'wwc_forbidden',
+				__( 'You do not have permission to verify this product.', 'wellness-chatbot' )
 			);
 		}
 

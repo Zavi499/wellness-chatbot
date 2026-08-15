@@ -389,15 +389,6 @@ export function reviewQueue(limit = 50, offset = 0): QueueRow[] {
   });
 }
 
-export class PharmacistGateError extends Error {
-  constructor(productId: number) {
-    super(
-      `Product ${productId} requires pharmacist review and can only be verified by a user with the wwc_pharmacist_review capability.`,
-    );
-    this.name = 'PharmacistGateError';
-  }
-}
-
 export interface ReviewDecision {
   draftId: number;
   action: 'approve' | 'reject';
@@ -412,19 +403,14 @@ export interface ReviewDecision {
 }
 
 /**
- * Applies a human review decision. This is the ONLY path to `verified`, and it
- * re-checks the pharmacist capability server-side — the UI hiding the button is
- * not the control (spec §11).
- *
- * `allowNonPharmacistApproval` defaults to the store's own configured choice
- * (`ALLOW_NON_PHARMACIST_APPROVAL`, off unless explicitly turned on) rather
- * than being read from `config` inline, so both states of this specific
- * safety-critical branch are directly unit-testable rather than only ever
- * exercised under whatever the process happened to boot with.
+ * Applies a human review decision. This is the ONLY path to `verified`. Any
+ * admin may approve any product, including one flagged `requires_pharmacist_review`
+ * (vitamins/supplements, pregnancy/children/medicine mentions) — pharmacist
+ * review is informational, not a requirement. `verified_by_pharmacist` below
+ * still only ever records whether an actual pharmacist reviewer did it.
  */
 export function applyReview(
   decision: ReviewDecision,
-  allowNonPharmacistApproval: boolean = config.recommendations.allowNonPharmacistApproval,
   conn: DatabaseSync = db(),
 ): { product_id: number; status: string } {
   const row = conn
@@ -453,21 +439,6 @@ export function applyReview(
   }
 
   const status = decision.status ?? 'verified';
-
-  // A gated product can only ever be touched by a pharmacist reviewer — not
-  // just for `verified`. Letting a non-pharmacist approve it as `partial`
-  // would still be blocked from recommendation by the eligibility filter, but
-  // it would silently drop the product out of the review queue without the
-  // pharmacist ever having seen it, which defeats the point of the gate.
-  //
-  // `allowNonPharmacistApproval` is the one, explicit, off-by-default escape
-  // hatch from that — a deliberate store-owner choice, not a bypass. It never
-  // touches `verified_by_pharmacist` below: that field stays an honest record
-  // of whether an actual pharmacist reviewer did this, regardless of who was
-  // *allowed* to.
-  if (product.requires_pharmacist_review && !decision.reviewerIsPharmacist && !allowNonPharmacistApproval) {
-    throw new PharmacistGateError(productId);
-  }
 
   const patch: Record<string, unknown> = { ...(decision.edits ?? {}) };
   patch.verification_status = status;

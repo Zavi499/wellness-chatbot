@@ -3,8 +3,7 @@
  *
  * Every route here is reached only via the WordPress plugin's signed
  * server-to-server proxy — admin credentials never touch the browser's calls
- * to this service. The plugin asserts the caller's WP capabilities in headers;
- * this service still re-checks the pharmacist gate itself (spec §11).
+ * to this service.
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { config } from '../config.js';
@@ -16,7 +15,6 @@ import {
   labelCatalogue,
   resetUnreviewedLabels,
   isEligibleForLabeling,
-  PharmacistGateError,
 } from '../labeling/pipeline.js';
 import { startLabelJob, getCurrentJob, isJobRunning } from '../labeling/job.js';
 import { listKb, upsertKb, deleteKb, getKbEntry } from '../kb/repository.js';
@@ -78,7 +76,6 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         cheap: config.openai.cheapModel,
         embed: config.openai.embedModel,
       },
-      allow_non_pharmacist_approval: config.recommendations.allowNonPharmacistApproval,
     };
   });
 
@@ -109,9 +106,6 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       });
       return { ok: true, ...result, product_id: Number(params.product_id) };
     } catch (err) {
-      if (err instanceof PharmacistGateError) {
-        return reply.code(403).send({ error: err.message, code: 'pharmacist_required' });
-      }
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
@@ -332,7 +326,6 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     products: countProducts(),
     vectors: vectorCount(),
     missing_settings: missingSettings(),
-    allow_non_pharmacist_approval: config.recommendations.allowNonPharmacistApproval,
   }));
 
   // --- Version history ------------------------------------------------------

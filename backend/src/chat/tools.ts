@@ -275,8 +275,7 @@ async function runSearchProducts(args: { query?: string }, ctx: ToolContext): Pr
   const visible = hits.filter(
     (h) =>
       ['verified', 'partial'].includes(h.product.verification_status) &&
-      h.product.stock_status !== 'outofstock' &&
-      !(h.product.requires_pharmacist_review && !h.product.verified_by_pharmacist),
+      h.product.stock_status !== 'outofstock',
   );
 
   return {

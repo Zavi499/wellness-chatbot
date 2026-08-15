@@ -91,44 +91,24 @@ describe('eligibility (§3.4)', () => {
     assert.ok(result.reasons.includes('out_of_stock'));
   });
 
-  test('a pharmacist-flagged product needs pharmacist verification, not just verified', () => {
-    const merelyVerified = product({ requires_pharmacist_review: true, verified_by_pharmacist: false });
-    assert.ok(
-      checkEligibility(merelyVerified, profile).reasons.includes('needs_pharmacist_verification'),
-      'admin-only verification must not be enough',
-    );
-
-    const properlyVerified = product({ requires_pharmacist_review: true, verified_by_pharmacist: true });
-    assert.equal(checkEligibility(properlyVerified, profile).eligible, true);
-  });
-
-  test('ALLOW_NON_PHARMACIST_APPROVAL: an admin-only verified, gated product becomes eligible when the flag is on', () => {
+  test('a pharmacist-flagged product is eligible on the same terms as any other verified product', () => {
+    // Pharmacist review is informational (see verified_by_pharmacist, used
+    // only as a scoring signal for child-suitable products) — it is never an
+    // extra eligibility requirement, admin-verified or pharmacist-verified.
     const adminVerified = product({ requires_pharmacist_review: true, verified_by_pharmacist: false });
+    assert.equal(checkEligibility(adminVerified, profile).eligible, true);
 
-    assert.ok(
-      checkEligibility(adminVerified, profile, { allowNonPharmacistApproval: false }).reasons.includes(
-        'needs_pharmacist_verification',
-      ),
-      'off by default — same behaviour as no option passed at all',
-    );
-    assert.equal(
-      checkEligibility(adminVerified, profile, { allowNonPharmacistApproval: true }).eligible,
-      true,
-      'store explicitly opted in — any admin approval now counts',
-    );
+    const pharmacistVerified = product({ requires_pharmacist_review: true, verified_by_pharmacist: true });
+    assert.equal(checkEligibility(pharmacistVerified, profile).eligible, true);
   });
 
-  test('ALLOW_NON_PHARMACIST_APPROVAL never rescues a merely `partial` gated product', () => {
+  test('a pharmacist-flagged, merely `partial` product is eligible exactly like any other partial product', () => {
     const partialGated = product({
       verification_status: 'partial',
       requires_pharmacist_review: true,
       verified_by_pharmacist: false,
     });
-    const result = checkEligibility(partialGated, profile, { allowNonPharmacistApproval: true });
-    assert.ok(
-      result.reasons.includes('needs_pharmacist_verification'),
-      'only `verified` qualifies a gated product, even with the flag on — partial (e.g. bulk-approve) must stay inert here',
-    );
+    assert.equal(checkEligibility(partialGated, profile).eligible, true);
   });
 
   test('rejects a product whose not_ideal_for conflicts with the customer', () => {

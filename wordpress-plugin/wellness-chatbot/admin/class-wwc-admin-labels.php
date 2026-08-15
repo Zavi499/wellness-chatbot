@@ -4,8 +4,9 @@
  *
  * Lowest AI confidence first, AI-suggested value beside the current value,
  * Approve / Edit-then-approve / Reject. Products flagged for pharmacist review
- * are visibly marked and their Approve control is disabled for anyone without
- * the capability — with the real check enforced server-side in the backend.
+ * (vitamins/supplements, pregnancy/children/medicine mentions) are visibly
+ * marked so a reviewer knows to look closer, but any admin may approve them —
+ * pharmacist review is informational, not a requirement.
  *
  * @package WellnessChatbot
  */
@@ -53,10 +54,9 @@ class WWC_Admin_Labels {
 			return;
 		}
 
-		$rows                 = isset( $result['rows'] ) && is_array( $result['rows'] ) ? $result['rows'] : array();
-		$counts               = isset( $result['counts'] ) ? $result['counts'] : array();
-		$models               = isset( $result['models'] ) && is_array( $result['models'] ) ? $result['models'] : array();
-		$allow_non_pharmacist = ! empty( $result['allow_non_pharmacist_approval'] );
+		$rows    = isset( $result['rows'] ) && is_array( $result['rows'] ) ? $result['rows'] : array();
+		$counts  = isset( $result['counts'] ) ? $result['counts'] : array();
+		$models  = isset( $result['models'] ) && is_array( $result['models'] ) ? $result['models'] : array();
 
 		self::render_summary( $counts );
 		self::render_run_labeling( $counts, $models );
@@ -69,7 +69,7 @@ class WWC_Admin_Labels {
 			self::render_bulk_bar();
 
 			foreach ( $rows as $row ) {
-				self::render_row( $row, $allow_non_pharmacist );
+				self::render_row( $row );
 			}
 
 			self::render_pagination( $page, count( $rows ), $limit );
@@ -223,17 +223,13 @@ class WWC_Admin_Labels {
 		echo '</div>';
 	}
 
-	private static function render_row( array $row, $allow_non_pharmacist = false ) {
+	private static function render_row( array $row ) {
 		$product_id  = isset( $row['product_id'] ) ? (int) $row['product_id'] : 0;
 		$draft_id    = isset( $row['draft_id'] ) ? (int) $row['draft_id'] : 0;
 		$confidence  = isset( $row['confidence'] ) ? (float) $row['confidence'] : 0.0;
 		$needs_rx    = ! empty( $row['requires_pharmacist_review'] );
 		$low_conf    = ! empty( $row['low_confidence'] );
 		$draft       = isset( $row['draft'] ) && is_array( $row['draft'] ) ? $row['draft'] : array();
-		// Mirrors the backend's own gate (see checkEligibility/applyReview):
-		// a non-pharmacist admin may approve a flagged product only when the
-		// store has explicitly turned ALLOW_NON_PHARMACIST_APPROVAL on.
-		$can_approve = ! $needs_rx || WWC_Roles::current_user_is_pharmacist() || $allow_non_pharmacist;
 
 		$bulk_eligible = ! $needs_rx && ! $low_conf;
 
@@ -265,10 +261,7 @@ class WWC_Admin_Labels {
 			$low_conf ? '<span class="wwc-flag wwc-flag-warn">' . esc_html__( 'low confidence', 'wellness-chatbot' ) . '</span>' : ''
 		);
 		if ( $needs_rx ) {
-			$rx_notice = $allow_non_pharmacist
-				? __( 'Pharmacist review normally required — currently any admin may approve this product (Settings: Allow non-pharmacist approval is on).', 'wellness-chatbot' )
-				: __( 'Pharmacist review required — only a Pharmacist Reviewer can verify this product.', 'wellness-chatbot' );
-			echo '<p class="wwc-flag wwc-flag-rx">' . esc_html( $rx_notice ) . '</p>';
+			echo '<p class="wwc-flag wwc-flag-rx">' . esc_html__( 'Touches vitamins/supplements or mentions pregnancy, children or medicines — worth a careful look before approving. Any admin may approve.', 'wellness-chatbot' ) . '</p>';
 		}
 		echo '</div></div>';
 
@@ -282,8 +275,7 @@ class WWC_Admin_Labels {
 
 		echo '<div class="wwc-review-actions">';
 		printf(
-			'<button type="submit" name="decision" value="approve_verified" class="button button-primary"%s>%s</button>',
-			$can_approve ? '' : ' disabled="disabled"',
+			'<button type="submit" name="decision" value="approve_verified" class="button button-primary">%s</button>',
 			esc_html__( 'Approve as verified', 'wellness-chatbot' )
 		);
 		printf(
@@ -431,9 +423,6 @@ class WWC_Admin_Labels {
 		$action = ( 'reject' === $decision ) ? 'reject' : 'approve';
 		$status = ( 'approve_partial' === $decision ) ? 'partial' : 'verified';
 
-		// The backend is the sole authority on the pharmacist gate — it already
-		// accounts for ALLOW_NON_PHARMACIST_APPROVAL, which a local pre-check
-		// here would not. Its 403 response (handled below) covers this case.
 		$response = WWC_Backend_Client::post(
 			'/api/admin/labels/' . $product_id,
 			array(
@@ -446,11 +435,7 @@ class WWC_Admin_Labels {
 		);
 
 		if ( is_wp_error( $response ) ) {
-			$data   = $response->get_error_data();
-			$notice = ( is_array( $data ) && isset( $data['status'] ) && 403 === (int) $data['status'] )
-				? 'pharmacist_required'
-				: 'failed';
-			WWC_Admin::redirect_back( WWC_Admin::MENU_SLUG, array( 'wwc_notice' => $notice ) );
+			WWC_Admin::redirect_back( WWC_Admin::MENU_SLUG, array( 'wwc_notice' => 'failed' ) );
 		}
 
 		// Mirror the approved values onto the product so WooCommerce stays the
@@ -559,13 +544,7 @@ class WWC_Admin_Labels {
 
 		update_post_meta( $product_id, '_wwc_ai_generated', '0' );
 		update_post_meta( $product_id, '_wwc_source_verification_date', gmdate( 'Y-m-d' ) );
-
-		// This point is only reached after the backend has already
-		// authoritatively approved the write (it would have 403'd above
-		// otherwise), so the local pharmacist-only gate is bypassed here —
-		// it exists to protect direct meta edits, not to re-litigate a
-		// decision the backend already made.
-		WWC_Meta::set_verification_status( $product_id, $status, true );
+		WWC_Meta::set_verification_status( $product_id, $status );
 	}
 
 	public static function handle_relabel() {

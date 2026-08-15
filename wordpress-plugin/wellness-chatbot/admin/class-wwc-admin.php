@@ -154,7 +154,6 @@ class WWC_Admin {
 			'relabeled'           => array( 'success', __( 'AI labeling re-run. The new draft is at the top of the queue.', 'wellness-chatbot' ) ),
 			'resolved'            => array( 'success', __( 'Escalation marked resolved.', 'wellness-chatbot' ) ),
 			'reset'               => array( 'success', __( 'Unreviewed AI drafts cleared. Verified and partial products were left untouched.', 'wellness-chatbot' ) ),
-			'pharmacist_required' => array( 'error', __( 'This product is flagged for pharmacist review. Only a user with the Pharmacist Reviewer capability can verify it.', 'wellness-chatbot' ) ),
 			'failed'              => array( 'error', __( 'That did not work. Check the backend connection and try again.', 'wellness-chatbot' ) ),
 		);
 

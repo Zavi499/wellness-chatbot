@@ -62,9 +62,12 @@ Two halves, deliberately separate:
 | `unverified` | AI draft, or never labeled | No |
 | `needs_pharmacist_review` | Awaiting a pharmacist | No |
 
-A product with `requires_pharmacist_review = true` additionally needs
-`verified_by_pharmacist = true`. Being `verified` by a shop manager is not
-enough — see `checkEligibility()` and `WWC_Meta::can_verify()`.
+A product with `requires_pharmacist_review = true` is held to the exact same
+bar as any other product — any admin's `verified` is enough. The flag is
+informational (surfaced in the review queue so a reviewer knows to look
+closer); `verified_by_pharmacist` only records whether a user holding
+`wwc_pharmacist_review` actually did the approval, used as a scoring signal
+for child-suitable products (§4.6), not an eligibility requirement.
 
 ---
 
@@ -84,11 +87,11 @@ enough — see `checkEligibility()` and `WWC_Meta::can_verify()`.
 5. A `label_drafts` row queues it for review, lowest confidence first.
 
 Vitamins get an extra instruction never to infer dosage safety or interactions —
-those fields stay null for a pharmacist.
+those fields stay null for a reviewer to fill in.
 
-`applyReview()` is the only path to `verified`, and it re-checks the pharmacist
-capability server-side. The plugin's disabled button is the courtesy; this is
-the control.
+`applyReview()` is the only path to `verified`. Pharmacist review is
+informational, not a requirement — any admin may approve any product,
+gated or not; the review queue just flags gated products for a closer look.
 
 ---
 
@@ -129,9 +132,9 @@ Branch questions use `show_if`, so a customer answers ~6 questions, not 20.
 
 ### Recommendation engine (§4.5, §4.6)
 
-- `eligibility.ts` — stock, verification, pharmacist gate, category match,
-  `not_ideal_for` conflicts, avoided ingredients, age. Every rejection carries a
-  reason so a thin result set is explainable.
+- `eligibility.ts` — stock, verification, category match, `not_ideal_for`
+  conflicts, avoided ingredients, age. Every rejection carries a reason so a
+  thin result set is explainable.
 - `scoring.ts` — the 100-point weighted model, exactly as specified. The
   breakdown is retained for the widget's "Why this?" panel.
 - `select.ts` — Best Overall / Best Value (≥15% cheaper or better cost-per-use) /
@@ -194,8 +197,9 @@ it before launch (launch checklist).
 | `admin/*.php` | The six admin screens (§8) |
 
 Administrators get `wwc_manage_chatbot` on activation but **not**
-`wwc_pharmacist_review` — that has to be a deliberate grant, not an accident of
-being an admin.
+`wwc_pharmacist_review` — any admin may still approve any product, but that
+separation keeps `verified_by_pharmacist` an honest record of who actually
+holds the pharmacist role, rather than defaulting true for every admin.
 
 Saving a product no longer makes an HTTP request at all — it only enqueues an
 id (`WWC_Queue`). The queue flushes as one batched push on `shutdown` if it's
@@ -240,9 +244,8 @@ cd backend && npm test
 - **Safety** — every §5.1 and §5.2 trigger in both languages, emergency
   precedence, false-positive checks on ordinary shopping questions, sensitive
   data detection, the pharmacist gate.
-- **Recommendation** — eligibility rules including the pharmacist gate, the
-  100-point weights, diversity penalty, top-three selection, no-padding, Arabic
-  card labels.
+- **Recommendation** — eligibility rules, the 100-point weights, diversity
+  penalty, top-three selection, no-padding, Arabic card labels.
 - **Conversation** — questionnaire validation, never-ask-twice, branch
   conditions, questionnaire escalation rules, language detection, Arabic
   normalization and synonyms, HMAC signing and replay rejection, product push
@@ -297,9 +300,11 @@ settings. The admin Analytics screen carries the §14 KPIs.
 3. **Human handoff channel** — the real WhatsApp Business number, and whether a
    live-chat tool is in use.
 4. **Backend hosting** — where the Node service runs, and access provisioning.
-5. **Pharmacist reviewer** — who holds `wwc_pharmacist_review`, and their
-   expected turnaround. Until someone does, no supplement can be recommended at
-   all.
+5. **Pharmacist reviewer** — optional. Assigning `wwc_pharmacist_review` to
+   someone with that background keeps `verified_by_pharmacist` (and the
+   child-suitability scoring bonus it feeds) meaningful, but any admin can
+   already approve supplements and pregnancy/children/medicine-flagged
+   products without one.
 6. **Business facts** — every field on the Settings screen.
 7. **Model IDs and pricing** — re-confirm against OpenAI's live list. Verified
    `gpt-5.6-terra` / `gpt-5.6-luna` / `gpt-5.6-sol` / `text-embedding-3-small`

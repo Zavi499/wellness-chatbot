@@ -14,7 +14,6 @@ import type { CustomerProfile } from './profile.js';
 export type IneligibilityReason =
   | 'out_of_stock'
   | 'not_verified'
-  | 'needs_pharmacist_verification'
   | 'category_mismatch'
   | 'not_ideal_for_conflict'
   | 'avoided_ingredient'
@@ -73,21 +72,8 @@ function notIdealText(product: Product): string {
 export function checkEligibility(
   product: Product,
   profile: CustomerProfile,
-  opts: {
-    excludeIds?: number[];
-    /**
-     * Defaults to the store's own configured choice
-     * (`ALLOW_NON_PHARMACIST_APPROVAL`, off unless explicitly turned on).
-     * Exposed as an explicit parameter — not read from `config` inline —
-     * purely so both states of this safety-critical branch are directly
-     * unit-testable rather than only ever exercised under whatever the
-     * process happened to boot with.
-     */
-    allowNonPharmacistApproval?: boolean;
-  } = {},
+  opts: { excludeIds?: number[] } = {},
 ): EligibilityResult {
-  const allowNonPharmacistApproval =
-    opts.allowNonPharmacistApproval ?? config.recommendations.allowNonPharmacistApproval;
   const reasons: IneligibilityReason[] = [];
 
   if (opts.excludeIds?.includes(product.product_id)) reasons.push('excluded');
@@ -95,29 +81,17 @@ export function checkEligibility(
   // 1. Stock. Out-of-stock is never a primary choice (spec §3.4).
   if (product.stock_status === 'outofstock') reasons.push('out_of_stock');
 
-  // 2. Data verification.
+  // 2. Data verification. A product flagged `requires_pharmacist_review`
+  // (vitamins/supplements, pregnancy/children/medicine mentions) is held to
+  // exactly this same bar as any other product — pharmacist review is
+  // informational (see `verified_by_pharmacist`, used only as a scoring
+  // signal), not an extra eligibility requirement.
   const acceptable = config.recommendations.allowPartialVerification
     ? ['verified', 'partial']
     : ['verified'];
   if (!acceptable.includes(product.verification_status)) reasons.push('not_verified');
 
-  // 3. The pharmacist gate — `verified` alone is not enough for these products,
-  // unless the store has explicitly opted into letting any admin's approval
-  // count (§ALLOW_NON_PHARMACIST_APPROVAL). `partial` still never qualifies a
-  // gated product either way — bulk-approve, the only path that sets
-  // `partial` on a gated item, is kept out of scope of this setting entirely
-  // on the WordPress side.
-  if (
-    product.requires_pharmacist_review &&
-    !(
-      product.verification_status === 'verified' &&
-      (product.verified_by_pharmacist || allowNonPharmacistApproval)
-    )
-  ) {
-    reasons.push('needs_pharmacist_verification');
-  }
-
-  // 4. Category and use-area match.
+  // 3. Category and use-area match.
   const productCategory = resolveProductCategory({
     categories: product.categories,
     tags: product.tags,
@@ -125,7 +99,7 @@ export function checkEligibility(
   });
   if (productCategory !== profile.category) reasons.push('category_mismatch');
 
-  // 5. `not_ideal_for` conflicts with the customer's stated type or concern.
+  // 4. `not_ideal_for` conflicts with the customer's stated type or concern.
   const notIdeal = notIdealText(product);
   if (notIdeal) {
     const customerSignals = [
@@ -143,7 +117,7 @@ export function checkEligibility(
     }
   }
 
-  // 6. Ingredients and formulation the customer asked to avoid.
+  // 5. Ingredients and formulation the customer asked to avoid.
   const haystack = textOf(product);
   for (const avoid of profile.avoid) {
     const terms = AVOID_TERMS[avoid];
@@ -161,7 +135,7 @@ export function checkEligibility(
     reasons.push('alcohol_conflict');
   }
 
-  // 7. Age suitability. An adult-only product is never shown for a child.
+  // 6. Age suitability. An adult-only product is never shown for a child.
   if (profile.for_child && (product.age_suitability === 'adult' || (product.age_min ?? 0) >= 16)) {
     reasons.push('age_conflict');
   }

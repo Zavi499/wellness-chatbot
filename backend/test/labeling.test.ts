@@ -11,7 +11,6 @@ import {
   isEligibleForLabeling,
   resetUnreviewedLabels,
   applyReview,
-  PharmacistGateError,
   type ReviewDecision,
 } from '../src/labeling/pipeline.js';
 import { upsertWooFields, updateWwcFields, getProduct } from '../src/products/repository.js';
@@ -203,31 +202,19 @@ function baseDecision(draftId: number, overrides: Partial<ReviewDecision> = {}):
   };
 }
 
-// ALLOW_NON_PHARMACIST_APPROVAL (spec: user-confirmed "yes any admin" — see
-// backend/.env.example). Off by default; when on, any admin's approval counts
-// for a gated product, but `verified_by_pharmacist` must still only ever
-// record whether an actual pharmacist did it.
-describe('applyReview: pharmacist gate under ALLOW_NON_PHARMACIST_APPROVAL', () => {
-  test('gated product + non-pharmacist reviewer + flag off (default): still blocked', () => {
+// Pharmacist review is informational, not mandatory: any admin may approve
+// any product, gated or not. `verified_by_pharmacist` must still only ever
+// record whether an actual pharmacist reviewer did it.
+describe('applyReview: pharmacist review is never mandatory', () => {
+  test('gated product + non-pharmacist reviewer: approval succeeds, verified_by_pharmacist stays false', () => {
     const conn = openMemoryDb();
     seedProduct(conn, 100, { requires_pharmacist_review: true, verification_status: 'unverified' });
     const draftId = insertPendingDraft(conn, 100);
 
-    assert.throws(
-      () => applyReview(baseDecision(draftId), false, conn),
-      PharmacistGateError,
-    );
-  });
-
-  test('gated product + non-pharmacist reviewer + flag on: allowed, but verified_by_pharmacist stays false', () => {
-    const conn = openMemoryDb();
-    seedProduct(conn, 101, { requires_pharmacist_review: true, verification_status: 'unverified' });
-    const draftId = insertPendingDraft(conn, 101);
-
-    const result = applyReview(baseDecision(draftId), true, conn);
+    const result = applyReview(baseDecision(draftId), conn);
 
     assert.equal(result.status, 'verified');
-    const product = getProduct(101, conn)!;
+    const product = getProduct(100, conn)!;
     assert.equal(product.verification_status, 'verified');
     assert.equal(
       product.verified_by_pharmacist,
@@ -236,27 +223,27 @@ describe('applyReview: pharmacist gate under ALLOW_NON_PHARMACIST_APPROVAL', () 
     );
   });
 
-  test('gated product + pharmacist reviewer + flag off: allowed as before, verified_by_pharmacist set true', () => {
+  test('gated product + pharmacist reviewer: verified_by_pharmacist set true', () => {
     const conn = openMemoryDb();
-    seedProduct(conn, 102, { requires_pharmacist_review: true, verification_status: 'unverified' });
-    const draftId = insertPendingDraft(conn, 102);
+    seedProduct(conn, 101, { requires_pharmacist_review: true, verification_status: 'unverified' });
+    const draftId = insertPendingDraft(conn, 101);
 
-    const result = applyReview(baseDecision(draftId, { reviewerIsPharmacist: true }), false, conn);
+    const result = applyReview(baseDecision(draftId, { reviewerIsPharmacist: true }), conn);
 
     assert.equal(result.status, 'verified');
-    const product = getProduct(102, conn)!;
+    const product = getProduct(101, conn)!;
     assert.equal(product.verification_status, 'verified');
     assert.equal(product.verified_by_pharmacist, true);
   });
 
-  test('non-gated product + non-pharmacist reviewer + flag off: unaffected, the gate never applied', () => {
+  test('non-gated product + non-pharmacist reviewer: unaffected, as before', () => {
     const conn = openMemoryDb();
-    seedProduct(conn, 103, { requires_pharmacist_review: false, verification_status: 'unverified' });
-    const draftId = insertPendingDraft(conn, 103);
+    seedProduct(conn, 102, { requires_pharmacist_review: false, verification_status: 'unverified' });
+    const draftId = insertPendingDraft(conn, 102);
 
-    const result = applyReview(baseDecision(draftId), false, conn);
+    const result = applyReview(baseDecision(draftId), conn);
 
     assert.equal(result.status, 'verified');
-    assert.equal(getProduct(103, conn)!.verification_status, 'verified');
+    assert.equal(getProduct(102, conn)!.verification_status, 'verified');
   });
 });

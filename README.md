@@ -74,8 +74,9 @@ define( 'WELLNESS_CHATBOT_SECRET', 'the-same-value-as-WP_SHARED_SECRET' );
 define( 'WELLNESS_CHATBOT_BACKEND_URL', 'https://chatbot.example.com' );
 ```
 
-Go to **Wellness Chatbot → Settings**, fill in the business facts, and assign
-at least one user the **Pharmacist Reviewer** role.
+Go to **Wellness Chatbot → Settings** and fill in the business facts. Assigning
+the **Pharmacist Reviewer** role to a user is optional — it's informational
+only, and any admin can approve any product regardless.
 
 ### 3. Load the catalogue
 
@@ -119,10 +120,11 @@ These come from the spec and are enforced in code, not just in prompts:
 - **AI never verifies its own work.** The labeling pipeline can only write
   `unverified`. Only an authenticated human action moves a product to
   `verified` or `partial` (§3.1, §11).
-- **The pharmacist gate is a capability, not a UI convention.** Every Vitamins &
-  Wellness product, and anything mentioning pregnancy, breastfeeding, children
-  or medicines, needs a user holding `wwc_pharmacist_review`. Checked in the
-  plugin *and* re-checked in the backend (§3.3, §3.4).
+- **Pharmacist review is a label, not a gate.** Every Vitamins & Wellness
+  product, and anything mentioning pregnancy, breastfeeding, children or
+  medicines, is flagged for extra care in the review queue — but any admin may
+  approve it. `verified_by_pharmacist` still only records whether a user
+  holding `wwc_pharmacist_review` actually did the approval (§3.3, §3.4).
 - **Safety screening runs before the model.** An emergency short-circuits to
   approved copy with no API call, stops selling for the rest of the
   conversation, and is logged (§5.1).
