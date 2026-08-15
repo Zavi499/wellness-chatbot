@@ -1,9 +1,13 @@
 /**
  * AI auto-labeling pipeline (spec §3.3).
  *
- * Flow: fetch product → structured-output call → write as an UNVERIFIED draft →
- * apply the pharmacist gate → queue for human review. Nothing in this file can
- * produce a `verified` product; only an authenticated human action can (§11).
+ * Flow: fetch product → structured-output call → write straight to `verified`.
+ * By explicit store-owner decision, labeling is direct — no human review step,
+ * for any category, including vitamins/supplements and anything mentioning
+ * pregnancy, children, or medicines. The one exception is a product whose
+ * category cannot be resolved at all (see `labelProduct()` below): there is no
+ * generated content to make recommendable, so that case still lands in the
+ * queue as `unverified` — not a review gate, just nothing to show yet.
  */
 import type { DatabaseSync } from 'node:sqlite';
 import { db, nowIso, toJson } from '../db/index.js';
@@ -91,9 +95,12 @@ async function callLabelingModel(
 }
 
 /**
- * Converts the model's draft into a `_wwc_*` patch. Note what is NOT here:
- * `verification_status` never becomes verified, and `verified_by_pharmacist`
- * is never set by this path.
+ * Converts the model's draft into a `_wwc_*` patch. `verification_status`
+ * goes straight to `verified` — direct labeling, no review step, by explicit
+ * store-owner decision. `ai_generated` stays true so this is still honestly
+ * distinguishable from a human approval, and `verified_by_pharmacist` is
+ * never set by this path — that field only ever means an actual pharmacist
+ * reviewer did it, which didn't happen here.
  */
 export function draftToPatch(draft: LabelDraft, confidence: number, requiresReview: boolean) {
   const empty = { en: [] as string[], ar: [] as string[] };
@@ -124,7 +131,7 @@ export function draftToPatch(draft: LabelDraft, confidence: number, requiresRevi
     ai_generated: true,
     ai_confidence: confidence,
     requires_pharmacist_review: requiresReview,
-    verification_status: 'unverified' as const,
+    verification_status: 'verified' as const,
   };
 }
 
@@ -206,12 +213,12 @@ export async function labelProduct(productId: number): Promise<LabelRunResult> {
 
   updateWwcFields(productId, draftToPatch(draft, confidence, gate.requiresPharmacistReview));
 
-  const draftId = insertDraft(productId, category, draft, confidence, model);
+  const draftId = insertDraft(productId, category, draft, confidence, model, true);
 
   logAudit({
     entity: 'product',
     entityId: String(productId),
-    action: 'ai_labeled',
+    action: 'ai_labeled_auto_verified',
     actor: `openai:${model}`,
     detail: { confidence, category, gate_reasons: gate.reasons },
   });
@@ -232,28 +239,41 @@ function insertDraft(
   draft: unknown,
   confidence: number,
   model: string,
+  autoVerified = false,
 ): number {
   const conn = db();
   // A fresh run supersedes any older pending draft for the same product.
   conn
     .prepare(`UPDATE label_drafts SET status = 'superseded' WHERE product_id = ? AND status = 'pending'`)
     .run(productId);
+  const now = nowIso();
   const result = conn
     .prepare(
-      `INSERT INTO label_drafts (product_id, category, draft_json, confidence, model, status, created_at)
-       VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
+      `INSERT INTO label_drafts (product_id, category, draft_json, confidence, model, status, created_at, reviewed_at, reviewed_by, review_note)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(productId, category, toJson(draft), confidence, model, nowIso());
+    .run(
+      productId,
+      category,
+      toJson(draft),
+      confidence,
+      model,
+      autoVerified ? 'approved' : 'pending',
+      now,
+      autoVerified ? now : null,
+      autoVerified ? 'ai:auto' : null,
+      autoVerified ? 'Auto-verified directly by AI labeling — no human review.' : null,
+    );
   return Number(result.lastInsertRowid);
 }
 
 /**
  * Whether a product has never been through labeling and is safe to send to
  * the model. This is unconditional, not an opt-in flag: a product that
- * already carries an AI draft (`ai_generated = true`) — pending, rejected, or
- * superseded, it doesn't matter which — is skipped, and so is anything a
- * human has already verified or partially approved. The only products this
- * lets through are ones nobody and nothing has ever touched.
+ * already carries an AI draft (`ai_generated = true`) — auto-verified,
+ * rejected, or superseded, it doesn't matter which — is skipped, and so is
+ * anything a human has separately verified or partially approved. The only
+ * products this lets through are ones nobody and nothing has ever touched.
  *
  * Exported as a pure function so it's testable without a database or OpenAI —
  * this is the exact rule a re-run after an interrupted or accidental batch
@@ -301,12 +321,14 @@ export async function labelCatalogue(opts: BackfillOptions = {}): Promise<{
 /**
  * Wipes every unreviewed AI draft back to a clean, never-labeled state — for
  * discarding a labeling run that went wrong (wrong model, ran unbounded,
- * whatever) without waiting to click Reject on each item one at a time.
+ * whatever). Since labeling now writes straight to `verified`, this mostly
+ * only ever finds the category-unresolved leftovers (the one case that still
+ * lands as `unverified` — see `labelProduct()`), or anything left over from
+ * before direct labeling shipped.
  *
- * The one invariant this can never violate: a product a human has already
- * marked `verified` or `partial` is untouched, full stop. The query below
- * only ever selects `ai_generated = 1` products that are still `unverified` —
- * there is no code path here that can reach anything a human approved.
+ * The one invariant this can never violate: a product marked `verified` or
+ * `partial` — by AI or a human — is untouched, full stop. The query below
+ * only ever selects `ai_generated = 1` products that are still `unverified`.
  */
 export function resetUnreviewedLabels(
   actor?: string,
@@ -339,6 +361,47 @@ export function resetUnreviewedLabels(
   });
 
   return { products_reset: targets.length, drafts_removed: draftsRemoved };
+}
+
+/**
+ * One-time migration: flips every currently-pending label draft straight to
+ * `verified`, sight-unseen — including low-confidence and category-unresolved
+ * ones. This mirrors, in bulk, what `labelProduct()` now does for every new
+ * label going forward; it exists only to bring drafts created before direct
+ * labeling shipped up to the same state. Explicit, confirmed store-owner
+ * decision — not something to run more than once per deployment.
+ *
+ * A category-unresolved draft (`category` null, no real generated fields —
+ * see `labelProduct()`) gets verified with whatever the product already had
+ * stored, same as everything else here; it is not special-cased.
+ */
+export function autoVerifyPendingDrafts(
+  actor?: string,
+  conn: DatabaseSync = db(),
+): { verified: number } {
+  const pending = conn
+    .prepare(`SELECT id, product_id FROM label_drafts WHERE status = 'pending'`)
+    .all() as { id: number; product_id: number }[];
+
+  const now = nowIso();
+  for (const { id, product_id } of pending) {
+    updateWwcFields(product_id, { verification_status: 'verified' }, conn);
+    conn
+      .prepare(
+        `UPDATE label_drafts SET status = 'approved', reviewed_at = ?, reviewed_by = ?, review_note = ? WHERE id = ?`,
+      )
+      .run(now, actor ?? 'ai:auto', 'Bulk auto-verified — direct-labeling migration.', id);
+  }
+
+  logAudit({
+    entity: 'product',
+    entityId: 'bulk',
+    action: 'ai_labels_auto_verified_bulk',
+    actor,
+    detail: { count: pending.length },
+  });
+
+  return { verified: pending.length };
 }
 
 // --- Review queue -----------------------------------------------------------

@@ -2,11 +2,13 @@
 /**
  * AI Label Review Queue (spec §8.1).
  *
- * Lowest AI confidence first, AI-suggested value beside the current value,
- * Approve / Edit-then-approve / Reject. Products flagged for pharmacist review
- * (vitamins/supplements, pregnancy/children/medicine mentions) are visibly
- * marked so a reviewer knows to look closer, but any admin may approve them —
- * pharmacist review is informational, not a requirement.
+ * Direct labeling: by explicit store-owner decision, an AI draft goes straight
+ * to verified and recommendable the moment it's generated — no review step,
+ * for any category, including vitamins/supplements and anything mentioning
+ * pregnancy, children, or medicines. This screen normally stays empty; the one
+ * thing that still lands here is a product whose category couldn't be
+ * resolved at all (nothing to review — the model was never even called), and
+ * anything left over from before direct labeling was turned on.
  *
  * @package WellnessChatbot
  */
@@ -62,9 +64,9 @@ class WWC_Admin_Labels {
 		self::render_run_labeling( $counts, $models );
 
 		if ( empty( $rows ) ) {
-			echo '<p>' . esc_html__( 'Nothing is waiting for review. Run AI labeling above if products are still unverified.', 'wellness-chatbot' ) . '</p>';
+			echo '<p>' . esc_html__( 'Nothing is waiting for review — expected. Labeling is direct: products go straight to verified as soon as AI labels them, no approval needed. Only a product whose category could not be resolved shows up here.', 'wellness-chatbot' ) . '</p>';
 		} else {
-			echo '<p class="description">' . esc_html__( 'Sorted by lowest AI confidence first — the drafts most likely to be wrong are at the top.', 'wellness-chatbot' ) . '</p>';
+			echo '<p class="description">' . esc_html__( 'Labeling is direct, so a product usually only lands here when its category could not be resolved from WooCommerce and the model was never called — fix its category/tags and re-run AI labeling, or fill in the fields yourself. Sorted by lowest AI confidence first.', 'wellness-chatbot' ) . '</p>';
 
 			self::render_bulk_bar();
 
@@ -106,6 +108,7 @@ class WWC_Admin_Labels {
 
 		echo '<div class="wwc-run-labeling" id="wwc-run-labeling">';
 		echo '<h2>' . esc_html__( 'Run AI labeling', 'wellness-chatbot' ) . '</h2>';
+		echo '<p class="description"><strong>' . esc_html__( 'Direct labeling is on:', 'wellness-chatbot' ) . '</strong> ' . esc_html__( 'every product this labels becomes verified and recommendable immediately, with no review step — including vitamins/supplements and anything mentioning pregnancy, children, or medicines.', 'wellness-chatbot' ) . '</p>';
 
 		if ( $label_model ) {
 			printf(
@@ -169,12 +172,16 @@ class WWC_Admin_Labels {
 			esc_html__( 'Select all eligible on this page', 'wellness-chatbot' )
 		);
 		printf(
-			'<button type="submit" form="wwc-bulk-form" class="button button-primary wwc-confirm-bulk" id="wwc-bulk-submit" disabled="disabled">%s</button>',
+			'<button type="submit" form="wwc-bulk-form" name="status" value="verified" class="button button-primary wwc-confirm-bulk-verified wwc-bulk-submit-btn" disabled="disabled">%s</button>',
+			esc_html__( 'Approve selected as verified', 'wellness-chatbot' )
+		);
+		printf(
+			'<button type="submit" form="wwc-bulk-form" name="status" value="partial" class="button wwc-confirm-bulk-partial wwc-bulk-submit-btn" disabled="disabled">%s</button>',
 			esc_html__( 'Approve selected as partial', 'wellness-chatbot' )
 		);
 		printf(
 			'<span class="description">%s</span>',
-			esc_html__( 'Only products that need no pharmacist review and scored above the low-confidence line can be bulk approved. Everything else still needs its own look.', 'wellness-chatbot' )
+			esc_html__( "Only products that aren't flagged for extra care and scored above the low-confidence line can be bulk approved. Everything else still needs its own look.", 'wellness-chatbot' )
 		);
 		echo '</div>';
 	}
@@ -559,11 +566,21 @@ class WWC_Admin_Labels {
 	}
 
 	/**
-	 * Bulk approve, restricted to drafts that are NOT flagged for pharmacist
-	 * review — the spec allows bulk only for low-risk categories.
+	 * Bulk approve as either verified or partial, per the button clicked.
+	 * Restricted to drafts that are NOT flagged for extra care and are above
+	 * the low-confidence line — this is a blind approval of the raw AI draft
+	 * with no per-product look, so it deliberately stays out of scope for
+	 * anything touching vitamins/supplements or pregnancy/children/medicines,
+	 * regardless of target status.
 	 */
 	public static function handle_bulk_approve() {
 		WWC_Admin::verify_post( 'wwc_bulk_approve' );
+
+		$status = isset( $_POST['status'] ) ? sanitize_key( wp_unslash( $_POST['status'] ) ) : 'partial';
+		if ( ! in_array( $status, array( 'verified', 'partial' ), true ) ) {
+			$status = 'partial';
+		}
+		$meta_status = 'verified' === $status ? WWC_Meta::STATUS_VERIFIED : WWC_Meta::STATUS_PARTIAL;
 
 		$drafts = isset( $_POST['draft_ids'] ) ? array_map( 'intval', (array) wp_unslash( $_POST['draft_ids'] ) ) : array();
 		$failed = 0;
@@ -580,14 +597,14 @@ class WWC_Admin_Labels {
 				array(
 					'draft_id' => $draft_id,
 					'action'   => 'approve',
-					'status'   => 'partial',
+					'status'   => $status,
 					'note'     => __( 'Bulk approved', 'wellness-chatbot' ),
 				)
 			);
 			if ( is_wp_error( $response ) ) {
 				++$failed;
 			} else {
-				WWC_Meta::set_verification_status( $product_id, WWC_Meta::STATUS_PARTIAL );
+				WWC_Meta::set_verification_status( $product_id, $meta_status );
 			}
 		}
 

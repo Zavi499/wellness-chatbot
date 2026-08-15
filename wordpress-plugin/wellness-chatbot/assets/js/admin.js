@@ -139,7 +139,7 @@
 
 		startButton.addEventListener( 'click', function () {
 			var limit = parseInt( limitInput.value, 10 ) || 25;
-			if ( ! window.confirm( 'Run AI labeling on up to ' + limit + ' products now?' ) ) {
+			if ( ! window.confirm( 'Run AI labeling on up to ' + limit + ' products now? They will go straight to verified and recommendable — no review step, for any category.' ) ) {
 				return;
 			}
 
@@ -224,7 +224,11 @@
 			'Delete this entry? This cannot be undone.'
 		);
 		confirmBefore(
-			'.wwc-confirm-bulk',
+			'.wwc-confirm-bulk-verified',
+			'Approve every selected product as verified? This uses the raw AI draft as-is, with no edits.'
+		);
+		confirmBefore(
+			'.wwc-confirm-bulk-partial',
 			'Approve every selected product as partial? This uses the raw AI draft as-is, with no edits.'
 		);
 		confirmBefore(
@@ -232,20 +236,22 @@
 			'Clear every unreviewed AI draft and reset those products back to never-labeled? This cannot be undone. Verified and partial products are not affected.'
 		);
 
-		// Bulk-select bar: keep the submit button disabled until something is
+		// Bulk-select bar: keep both submit buttons disabled until something is
 		// actually selected, and let "select all" toggle every eligible row.
 		var rowChecks = document.querySelectorAll( '.wwc-row-check' );
-		var bulkSubmit = document.getElementById( 'wwc-bulk-submit' );
+		var bulkSubmitButtons = document.querySelectorAll( '.wwc-bulk-submit-btn' );
 		var selectAll = document.getElementById( 'wwc-select-all' );
 
 		function updateBulkSubmit() {
-			if ( ! bulkSubmit ) {
+			if ( ! bulkSubmitButtons.length ) {
 				return;
 			}
 			var anyChecked = Array.prototype.some.call( rowChecks, function ( c ) {
 				return c.checked;
 			} );
-			bulkSubmit.disabled = ! anyChecked;
+			bulkSubmitButtons.forEach( function ( button ) {
+				button.disabled = ! anyChecked;
+			} );
 		}
 
 		rowChecks.forEach( function ( checkbox ) {

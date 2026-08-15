@@ -512,39 +512,55 @@ concerns, suitable skin/hair types, who it is not ideal for, key ingredients,
 texture, fragrance and alcohol flags, how to use, routine step, age suitability,
 warnings, and Arabic search synonyms.
 
-Three rules are enforced in code, not just asked for in the prompt:
+Rules enforced in code, not just asked for in the prompt:
 
 1. **Nulls are allowed and expected.** If the source text does not support a
    field, the model must return null rather than guess. A thin description
    produces a thin draft — by design.
-2. **Every draft is `unverified`.** The pipeline is structurally incapable of
-   marking anything verified. Only a human action can do that.
-3. **Sensitive products are flagged automatically.** Any product in Vitamins &
-   Wellness, or whose text mentions pregnancy, breastfeeding, infants, children,
-   or medicines, is marked so a reviewer knows to look closer — any admin may
-   still approve it, this is informational, not a requirement.
+2. **Labeling is direct.** By explicit store-owner decision, every draft is
+   written straight to `verified` and becomes recommendable the moment it's
+   generated — no review step, for any category, including Vitamins &
+   Wellness and anything mentioning pregnancy, breastfeeding, children, or
+   medicines. There is no approval queue standing between the model and your
+   customers.
+3. **Sensitive products are still flagged, informationally.** Any product in
+   Vitamins & Wellness, or whose text mentions pregnancy, breastfeeding,
+   infants, children, or medicines, is marked `requires_pharmacist_review` in
+   the data — visible if you go looking, but it does not hold anything back.
+4. **The one exception is a product with no resolvable category.** If the
+   pipeline can't map a product to Face/Body/Hair/Vitamins from its
+   WooCommerce category, tags, or name, it does not guess and does not call
+   the model at all — that product stays `unverified` in the Label Review
+   Queue until you fix its category/tags and re-run labeling.
 
-Supplements get an extra instruction: never infer dosage safety, upper limits, or
-interactions. Serving size and amounts are copied exactly as printed, or left
-null. Those fields are worth a pharmacist's eye if one is available, but any
-reviewer can fill them in from the manufacturer leaflet.
+Supplements get an extra model instruction: never infer dosage safety, upper
+limits, or interactions. Serving size and amounts are copied exactly as
+printed, or left null — and because nothing reviews this before it goes live,
+a thin or wrong product description is now the main real risk here, more than
+it was before. See 6.2.
 
-## 6.2 Run a trial batch first
+## 6.2 Before you run this at all
 
-Always start small so you can judge quality and cost:
+Because labeling is direct, running it is the same action as publishing —
+there's no draft stage to catch a bad batch before customers see it. Two
+things matter more than they used to:
+
+- **Product descriptions carry the whole burden.** The model only writes what
+  the source text supports; it will not fabricate a warning or a dosage limit
+  it wasn't given. A thin or wrong WooCommerce description becomes a thin or
+  wrong live product page, immediately.
+- **Start with a small, real limit and actually read the output** — in the
+  product's own WooCommerce entry (`_wwc_*` fields), since it is no longer
+  sitting in a queue for you to review before it matters.
 
 ```bash
 cd /opt/wellness-chatbot/backend
-npm run label -- --limit 25
+npm run label -- --limit 10
 ```
 
-You will see per-product progress with the resolved category, confidence, and a
-`[pharmacist]` marker where the extra-care flag fired. At the end it reminds
-you that everything is unverified.
-
-Now open **Wellness Chatbot → AI Label Review Queue** and read those 25. If the
-drafts are mostly empty, the problem is your product descriptions (see 5.2), not
-the model.
+You'll see per-product progress with the resolved category, confidence, and a
+`[pharmacist]` marker where the informational flag fired. Check a handful of
+those 10 products in wp-admin, then decide whether to raise the limit.
 
 ## 6.3 Run the full pass
 
@@ -552,9 +568,9 @@ the model.
 npm run label
 ```
 
-This skips products that already have a pending draft and never re-labels
-human-verified data. It is safe to re-run — an interrupted pass picks up where it
-left off.
+This skips anything already labeled (verified, or a leftover unverified draft
+someone rejected) and is safe to re-run — an interrupted pass picks up where
+it left off.
 
 For a large catalogue, run it in a detached session so an SSH drop does not kill
 it:
@@ -576,71 +592,54 @@ per product). Embeddings for the same catalogue cost well under a dollar.
 Both are one-off per product, not per conversation. Re-check current pricing
 before budgeting — rates change.
 
-## 6.4 Review and approve
-
-**Wellness Chatbot → AI Label Review Queue**
-
-Products are sorted **lowest confidence first**, so the drafts most likely to be
-wrong are the ones you see first. Each card shows the currently stored value
-beside the AI suggestion, with the suggestion editable.
-
-For each product:
-
-- **Approve as verified** — the data is complete and correct. It becomes
-  recommendable.
-- **Approve as partial** — correct but incomplete. Still recommendable, but the
-  assistant has less to work with. Use this to get coverage quickly.
-- **Reject** — the draft is wrong. The product stays unverified and invisible to
-  the assistant.
-- **Re-run AI labeling** — after you have improved the product description.
-
-Editing before approving is the normal case, not the exception. What you save
-becomes the truth; the AI's version is discarded.
-
-Bilingual fields use `english | arabic` in a single box — for example
-`Not ideal for sensitive skin | غير مناسب للبشرة الحساسة`. Lists are
-comma-separated.
-
-Add a review note when you check against a manufacturer leaflet. It goes into the
-audit trail, which is what **Version History** shows.
-
-### Pharmacist-flagged products in practice
-
-A product marked *"Touches vitamins/supplements or mentions pregnancy,
-children or medicines"* can still be approved by any admin — the flag is a
-prompt to double-check the draft against a manufacturer leaflet, not a
-restriction on who can click Approve. If you do want an actual pharmacist's
-sign-off on these before they go live, that has to be a team process (route
-the flagged rows to them before anyone clicks Approve) — the software will not
-enforce it for you.
-
-## 6.5 Practical order of work
-
-You do not need the whole catalogue verified to launch.
-
-1. Sort your products by sales volume.
-2. Verify your **top 50 sellers** properly, editing as you go. That covers most
-   of what customers ask about.
-3. Bulk-approve low-risk face and body products as **partial** for coverage.
-4. Leave the long tail unverified. The assistant simply will not offer those
-   products — it will not offer them wrongly, which is the point.
-5. If someone on the team has a pharmacy background, it's still worth having
-   them approve the Vitamins & Wellness queue specifically — but nothing
-   requires it, and any admin can do it if there's nobody to hand it to.
-
 **Check:** Settings should now show a non-zero "recommendable" count. Open the
 widget, choose Face care, and walk through the questionnaire. You should get up
 to three cards with real prices and stock badges.
 
+## 6.4 Migrating from before direct labeling
+
+If this deployment previously had products sitting `unverified` in the Label
+Review Queue waiting on a human approval, run this once to bring them up to
+the same state new labels get automatically:
+
+```bash
+npm run verify-pending
+```
+
+This verifies every currently-pending draft sight-unseen, including
+low-confidence ones and anything with an unresolved category (those get
+verified with whatever data they already had — there's nothing to un-hide
+about them). It's a one-time migration, not something to run repeatedly.
+
+## 6.5 The Label Review Queue now
+
+**Wellness Chatbot → AI Label Review Queue**
+
+With direct labeling on, this screen is normally empty — there is nothing
+waiting on you. The only thing that lands here is a product whose category
+couldn't be resolved (see 6.1, point 4): fix its WooCommerce category or
+tags, then either click **Re-run AI labeling** on that row, or fill the
+fields in yourself and click **Approve as verified**.
+
+Bilingual fields use `english | arabic` in a single box — for example
+`Not ideal for sensitive skin | غير مناسب للبشرة الحساسة`. Lists are
+comma-separated. A review note goes into the audit trail (**Version History**).
+
 ## 6.6 Re-labeling
 
-Re-label a single product from the queue after improving its description.
+**Re-run AI labeling** in the queue re-labels a product that's still sitting
+there (category-unresolved). For a product that's already `verified` from a
+prior direct-label run, there is currently no button in wp-admin for it —
+the backend accepts a re-label for any AI-generated product regardless of
+status (`POST /api/admin/labels/:id/relabel`), but nothing in the plugin UI
+surfaces that outside the queue today. In practice, either edit the
+product's `_wwc_*` fields directly, or ask for that UI gap to be closed if
+you find yourself needing it often.
 
 To have every product save trigger a re-label, tick **Settings → Widget →
-Re-run AI labeling on save**. It is off by default on purpose: with it on, a bulk
-price update would trigger a catalogue-wide model spend. Note that re-labeling
-never touches human-verified data, so switching it on will not undo your
-pharmacist's work.
+Re-run AI labeling on save**. It is off by default on purpose: with it on, a
+bulk price update would trigger a catalogue-wide model spend, and each
+re-label is live the moment it finishes, with nobody looking at it first.
 
 ---
 
@@ -660,7 +659,7 @@ What still needs a human, on a schedule:
 | --- | --- |
 | Daily during launch | Check the Escalation Log — emergencies also raise a notice anywhere in wp-admin |
 | Weekly during launch | Review thumbs-down feedback and the no-answer rate |
-| Weekly | Clear the Label Review Queue for new products |
+| Weekly | Check the Label Review Queue — should normally be empty; anything there needs a category/tag fix |
 | Monthly | Analytics review; re-test the safety flows after any big catalogue or policy change |
 | After any policy change | Update Business Settings and the FAQ — never leave the assistant quoting an old policy |
 
@@ -685,9 +684,9 @@ first. Also confirm either the floating launcher is on or the shortcode is place
 
 **The assistant will not recommend anything**
 Check the recommendable count in Settings. If it is zero, nothing has been
-approved yet — that is Part 6.4, not a bug. Any admin can approve, including
-supplements and pregnancy/children/medicine-flagged products — a Pharmacist
-Reviewer is not required.
+labeled yet — run `npm run label` (Part 6.3). Labeling is direct, so a
+successful run should move that count immediately; there is no separate
+approval step waiting to be done.
 
 **"Model not found" in the logs**
 An OpenAI model ID was retired. Update the four `OPENAI_MODEL_*` lines in `.env`

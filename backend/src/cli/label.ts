@@ -1,11 +1,12 @@
 /**
  * Batch AI labeling run (roadmap phase 3).
  *
- *   npm run label                 # label everything not already queued
+ *   npm run label                 # label everything not already labeled
  *   npm run label -- --limit 25   # a costed trial run first
  *
- * Nothing this produces is customer-visible: every product lands in the WP
- * Label Review Queue as `unverified` until a human approves it.
+ * Direct labeling: every product this labels goes straight to `verified` and
+ * is immediately recommendable — no review step, by explicit store-owner
+ * decision. Start with a limit to check quality and cost before a full run.
  */
 import { labelCatalogue } from '../labeling/pipeline.js';
 import { config } from '../config.js';
@@ -37,8 +38,10 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    '\nAll output is UNVERIFIED. Review it in WordPress → Wellness Chatbot → AI Label Review Queue.\n' +
-      'Products flagged for pharmacist review can only be verified by a user with the wwc_pharmacist_review capability.',
+    '\nEvery product above is now VERIFIED and recommendable — direct labeling, no review step. ' +
+      'A product whose category could not be resolved is the one exception: it has no generated ' +
+      'content, so it stays unverified in WordPress → Wellness Chatbot → AI Label Review Queue until ' +
+      'its WooCommerce category/tags are fixed and it is re-labeled.',
   );
 }
 

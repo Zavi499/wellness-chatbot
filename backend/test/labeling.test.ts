@@ -11,6 +11,8 @@ import {
   isEligibleForLabeling,
   resetUnreviewedLabels,
   applyReview,
+  draftToPatch,
+  autoVerifyPendingDrafts,
   type ReviewDecision,
 } from '../src/labeling/pipeline.js';
 import { upsertWooFields, updateWwcFields, getProduct } from '../src/products/repository.js';
@@ -44,6 +46,37 @@ describe('isEligibleForLabeling (pure)', () => {
       isEligibleForLabeling({ ai_generated: false, verification_status: 'partial' }),
       false,
     );
+  });
+});
+
+// Direct labeling: by explicit store-owner decision, an AI draft goes straight
+// to `verified` — no human review step, for any category.
+describe('draftToPatch (direct labeling, no review gate)', () => {
+  test('writes verification_status verified, regardless of category sensitivity', () => {
+    const patch = draftToPatch({}, 0.8, false);
+    assert.equal(patch.verification_status, 'verified');
+
+    const gatedPatch = draftToPatch({}, 0.8, true);
+    assert.equal(
+      gatedPatch.verification_status,
+      'verified',
+      'a product flagged requires_pharmacist_review still goes straight to verified',
+    );
+  });
+
+  test('stays ai_generated=true and never sets verified_by_pharmacist', () => {
+    const patch = draftToPatch({}, 0.8, true);
+    assert.equal(patch.ai_generated, true, 'honestly records that no human touched this');
+    assert.equal(
+      'verified_by_pharmacist' in patch,
+      false,
+      'this path never claims a pharmacist reviewed it',
+    );
+  });
+
+  test('carries the requires_pharmacist_review flag through as informational metadata only', () => {
+    assert.equal(draftToPatch({}, 0.8, true).requires_pharmacist_review, true);
+    assert.equal(draftToPatch({}, 0.8, false).requires_pharmacist_review, false);
   });
 });
 
@@ -245,5 +278,57 @@ describe('applyReview: pharmacist review is never mandatory', () => {
 
     assert.equal(result.status, 'verified');
     assert.equal(getProduct(102, conn)!.verification_status, 'verified');
+  });
+});
+
+// One-time migration bringing pre-existing pending drafts up to the same
+// direct-labeling state new labels get automatically.
+describe('autoVerifyPendingDrafts', () => {
+  test('verifies every pending draft, including low-confidence and category-unresolved ones', () => {
+    const conn = openMemoryDb();
+    seedProduct(conn, 200, { verification_status: 'unverified', requires_pharmacist_review: true });
+    const gatedDraft = insertPendingDraft(conn, 200);
+    seedProduct(conn, 201, { verification_status: 'unverified' });
+    conn
+      .prepare(
+        `INSERT INTO label_drafts (product_id, category, draft_json, confidence, model, status, created_at)
+         VALUES (?, NULL, ?, 0, 'n/a', 'pending', datetime('now'))`,
+      )
+      .run(201, toJson({ note: 'Category could not be resolved' }));
+
+    const result = autoVerifyPendingDrafts('tester', conn);
+
+    assert.equal(result.verified, 2);
+    assert.equal(getProduct(200, conn)!.verification_status, 'verified');
+    assert.equal(getProduct(201, conn)!.verification_status, 'verified', 'category-unresolved is not special-cased');
+
+    const draftRow = conn
+      .prepare('SELECT status, reviewed_by FROM label_drafts WHERE id = ?')
+      .get(gatedDraft) as { status: string; reviewed_by: string };
+    assert.equal(draftRow.status, 'approved');
+    assert.equal(draftRow.reviewed_by, 'tester');
+  });
+
+  test('never touches rejected, superseded, or already-verified drafts', () => {
+    const conn = openMemoryDb();
+    seedProduct(conn, 202, { verification_status: 'unverified' });
+    insertDraft(conn, 202, 'rejected');
+    seedProduct(conn, 203, { verification_status: 'unverified' });
+    insertDraft(conn, 203, 'superseded');
+    seedProduct(conn, 204, { verification_status: 'verified' });
+    insertDraft(conn, 204, 'approved');
+
+    const result = autoVerifyPendingDrafts('tester', conn);
+
+    assert.equal(result.verified, 0);
+    assert.equal(getProduct(202, conn)!.verification_status, 'unverified');
+    assert.equal(getProduct(203, conn)!.verification_status, 'unverified');
+    assert.equal(getProduct(204, conn)!.verification_status, 'verified');
+  });
+
+  test('no pending drafts: a harmless no-op', () => {
+    const conn = openMemoryDb();
+    const result = autoVerifyPendingDrafts('tester', conn);
+    assert.equal(result.verified, 0);
   });
 });

@@ -321,12 +321,26 @@ saving a product in wp-admin queues and forwards it automatically.
 
 ### Labeling
 
-```bash
-# A small, costed trial first
-npm run label:prod -- --limit 25
+Labeling is direct: every product it labels goes straight to `verified` and
+recommendable immediately — no review step, for any category. There's no
+draft stage to catch a bad batch before customers see it, so start smaller
+than you think you need and actually check a few products in wp-admin before
+scaling up.
 
-# Once you're happy with the drafts, the full pass
+```bash
+# A small, costed trial first — check a few products afterwards
+npm run label:prod -- --limit 10
+
+# Once you're happy with the output, the full pass
 npm run label:prod
+```
+
+If this deployment had products sitting unverified in the Label Review Queue
+from before direct labeling, run this once to bring them up to the same
+state (sight-unseen — see DEPLOYMENT.md Part 6.4 for what this does):
+
+```bash
+npm run verify-pending:prod
 ```
 
 You can also trigger labeling from **Wellness Chatbot → Settings → Catalogue**

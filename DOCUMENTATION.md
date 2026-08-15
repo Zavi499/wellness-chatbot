@@ -57,17 +57,18 @@ Two halves, deliberately separate:
 
 | State | Meaning | Recommendable? |
 | --- | --- | --- |
-| `verified` | A human confirmed the data | Yes |
-| `partial` | Human-confirmed but incomplete | Yes, if `ALLOW_PARTIAL_VERIFICATION=1` |
-| `unverified` | AI draft, or never labeled | No |
-| `needs_pharmacist_review` | Awaiting a pharmacist | No |
+| `verified` | Confirmed data — by direct AI labeling or a human edit | Yes |
+| `partial` | Confirmed but incomplete | Yes, if `ALLOW_PARTIAL_VERIFICATION=1` |
+| `unverified` | Nothing generated yet (category unresolved, or never labeled) | No |
+| `needs_pharmacist_review` | Legacy status value; not currently written anywhere | No |
 
-A product with `requires_pharmacist_review = true` is held to the exact same
-bar as any other product — any admin's `verified` is enough. The flag is
-informational (surfaced in the review queue so a reviewer knows to look
-closer); `verified_by_pharmacist` only records whether a user holding
-`wwc_pharmacist_review` actually did the approval, used as a scoring signal
-for child-suitable products (§4.6), not an eligibility requirement.
+Direct labeling (explicit store-owner decision, overriding the original
+spec's human-in-the-loop requirement at §3.1/§11): `labelProduct()` writes
+`verification_status = 'verified'` itself, immediately, for every category —
+no review step. `requires_pharmacist_review` is purely informational (still
+shown in the review queue, still gates nothing); `verified_by_pharmacist`
+only records whether a user holding `wwc_pharmacist_review` did a *manual*
+approval, used only as a scoring signal for child-suitable products (§4.6).
 
 ---
 
@@ -76,22 +77,30 @@ for child-suitable products (§4.6), not an eligibility requirement.
 `backend/src/labeling/`
 
 1. `pipeline.ts` resolves the product's category from the store taxonomy. If it
-   cannot, it does **not** guess — the queue shows "category unresolved".
+   cannot, it does **not** guess — the queue shows "category unresolved", and
+   this is the one case where nothing gets written and the product stays
+   `unverified` (there is nothing to verify).
 2. A structured-output call using the per-category schema in `schemas.ts`. Every
    field is nullable so "I cannot tell from the source text" is expressible.
-3. `gate.ts` applies the pharmacist gate: the whole Vitamins & Wellness shelf,
-   anything mentioning pregnancy / breastfeeding / children / medicines, or the
-   model raising `mentions_sensitive_topic` itself.
-4. Values are written with `verification_status = 'unverified'`,
-   `ai_generated = true`, and the model's self-reported confidence.
-5. A `label_drafts` row queues it for review, lowest confidence first.
+3. `gate.ts` still evaluates `requires_pharmacist_review`: the whole Vitamins &
+   Wellness shelf, anything mentioning pregnancy / breastfeeding / children /
+   medicines, or the model raising `mentions_sensitive_topic` itself — but this
+   is now a display flag, not a gate.
+4. Values are written with `verification_status = 'verified'`,
+   `ai_generated = true`, and the model's self-reported confidence — live and
+   recommendable immediately.
+5. A `label_drafts` row is inserted already `approved` (`reviewed_by = 'ai:auto'`),
+   purely as an audit record of what the model produced.
 
 Vitamins get an extra instruction never to infer dosage safety or interactions —
-those fields stay null for a reviewer to fill in.
+those fields stay null rather than guessed, since nobody reviews them before
+they go live.
 
-`applyReview()` is the only path to `verified`. Pharmacist review is
-informational, not a requirement — any admin may approve any product,
-gated or not; the review queue just flags gated products for a closer look.
+`applyReview()` still exists (manual edit-and-approve, and the leftover
+category-unresolved case) but is no longer the primary path to `verified` —
+`labelProduct()` writes it directly. `autoVerifyPendingDrafts()` is a
+one-time migration that brought every draft created before direct labeling
+shipped up to the same state; see `backend/src/cli/auto-verify-pending.ts`.
 
 ---
 
@@ -239,7 +248,7 @@ endpoint; the backend never touches cart state.
 cd backend && npm test
 ```
 
-88 tests, no network or API key required:
+100+ tests, no network or API key required:
 
 - **Safety** — every §5.1 and §5.2 trigger in both languages, emergency
   precedence, false-positive checks on ordinary shopping questions, sensitive

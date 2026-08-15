@@ -96,9 +96,12 @@ cd backend && npm run import -- --file ./catalogue.json --embed
 cd backend && npm run label -- --limit 25
 ```
 
-Start with a limit to see the cost and quality, then run the full pass. Every
-draft lands in **Wellness Chatbot → AI Label Review Queue** as `unverified`.
-Nothing reaches a customer until a human approves it.
+Start with a limit to see the cost and quality, then run the full pass.
+Labeling is direct: every product this labels becomes `verified` and
+recommendable immediately — no review step, for any category. The one
+exception is a product whose category can't be resolved from WooCommerce at
+all; that lands in **Wellness Chatbot → AI Label Review Queue** with nothing
+generated, waiting on a category/tag fix and a re-run.
 
 ### 5. Widget
 
@@ -117,14 +120,18 @@ floating launcher in Settings.
 
 These come from the spec and are enforced in code, not just in prompts:
 
-- **AI never verifies its own work.** The labeling pipeline can only write
-  `unverified`. Only an authenticated human action moves a product to
-  `verified` or `partial` (§3.1, §11).
-- **Pharmacist review is a label, not a gate.** Every Vitamins & Wellness
-  product, and anything mentioning pregnancy, breastfeeding, children or
-  medicines, is flagged for extra care in the review queue — but any admin may
-  approve it. `verified_by_pharmacist` still only records whether a user
-  holding `wwc_pharmacist_review` actually did the approval (§3.3, §3.4).
+- **Labeling is direct, by explicit store-owner decision.** The labeling
+  pipeline writes straight to `verified` — no human review step, for any
+  category, including vitamins/supplements and anything mentioning pregnancy,
+  breastfeeding, children or medicines. This is a deliberate departure from
+  the original spec's human-in-the-loop requirement (§3.1, §11); see
+  `backend/src/labeling/pipeline.ts` for the current behavior. The one
+  exception: a product whose category can't be resolved has nothing generated
+  to verify, so it stays `unverified` until that's fixed.
+- **`verified_by_pharmacist` stays honest regardless.** It is only ever set
+  true when a user holding `wwc_pharmacist_review` did the approval — never by
+  the direct-labeling path, never by a non-pharmacist admin. It currently
+  feeds a small scoring bonus for child-suitable products (§4.6), nothing more.
 - **Safety screening runs before the model.** An emergency short-circuits to
   approved copy with no API call, stops selling for the rest of the
   conversation, and is logged (§5.1).

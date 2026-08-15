@@ -191,7 +191,7 @@
 	color: #646970;
 }
 
-#wwc-bulk-submit:disabled {
+.wwc-bulk-submit-btn:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
 }

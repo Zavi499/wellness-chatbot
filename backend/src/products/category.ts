@@ -20,9 +20,9 @@ const RULES: { category: ProductCategory; patterns: RegExp[] }[] = [
   {
     category: 'body',
     patterns: [
-      /body/i, /bath/i, /shower/i, /deodorant/i, /hand ?cream/i, /foot/i, /lotion/i,
+      /body/i, /bath/i, /shower/i, /deodorant/i, /hand ?cream/i, /foot/i, /heel/i, /lotion/i,
       /intimate/i, /scrub/i, /stretch mark/i,
-      /جسم/, /استحمام/, /مزيل عرق/, /لوشن/,
+      /جسم/, /استحمام/, /مزيل عرق/, /لوشن/, /كعب/,
     ],
   },
   {

@@ -227,7 +227,7 @@ class WWC_Admin_Settings {
 		);
 		printf(
 			'<p><label><input type="checkbox" name="label" value="1" /> %s</label></p>',
-			esc_html__( 'Also run AI labeling on products that have no draft yet (uses OpenAI credit)', 'wellness-chatbot' )
+			esc_html__( 'Also run AI labeling on products that have no draft yet (uses OpenAI credit). Labeling is direct — products go straight to verified and recommendable, no review step.', 'wellness-chatbot' )
 		);
 		printf(
 			'<p class="wwc-label-limit"><label>%s <input type="number" name="label_limit" value="25" min="1" max="1000" class="small-text" /></label><br /><span class="description">%s</span></p>',
