@@ -68,18 +68,23 @@ export class Api {
   }
 
   /**
-   * Adds to cart through WooCommerce's own AJAX endpoint — the chatbot backend
-   * never touches cart or checkout state (spec §4.7).
+   * Adds to cart through WooCommerce's own AJAX endpoint (`?wc-ajax=add_to_cart`,
+   * built server-side via `WC_AJAX::get_endpoint()` — see `addToCartUrl` in
+   * class-wwc-widget.php) — the chatbot backend never touches cart or
+   * checkout state (spec §4.7). This is a different mechanism from
+   * WordPress's generic admin-ajax.php: WooCommerce routes it by the
+   * `wc-ajax` query param on the URL, not an `action` field in the body.
    */
   async addToCart(productId: number): Promise<boolean> {
+    if (!this.config.addToCartUrl) return false;
+
     const body = new URLSearchParams({
-      action: 'woocommerce_ajax_add_to_cart',
       product_id: String(productId),
       quantity: '1',
     });
 
     try {
-      const response = await fetch(this.config.ajaxUrl, {
+      const response = await fetch(this.config.addToCartUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         credentials: 'same-origin',

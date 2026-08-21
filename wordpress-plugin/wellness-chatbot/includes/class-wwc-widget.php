@@ -92,7 +92,10 @@ class WWC_Widget {
 			'WWC_CONFIG',
 			array(
 				'restUrl'      => esc_url_raw( rest_url( WWC_Rest::NAMESPACE ) ),
-				'addToCartUrl' => esc_url_raw( wc_get_cart_url() ),
+				// WooCommerce's own AJAX add-to-cart endpoint (the `?wc-ajax=`
+				// mechanism, handled via `wc_ajax_add_to_cart` — NOT
+				// admin-ajax.php, which has no matching action registered).
+				'addToCartUrl' => class_exists( 'WC_AJAX' ) ? esc_url_raw( WC_AJAX::get_endpoint( 'add_to_cart' ) ) : '',
 				'ajaxUrl'      => esc_url_raw( admin_url( 'admin-ajax.php' ) ),
 				'isRtl'        => is_rtl(),
 				'locale'       => get_locale(),
