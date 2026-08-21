@@ -9,7 +9,7 @@
  */
 import { db, nowIso } from '../db/index.js';
 import { logAudit } from '../analytics/audit.js';
-import type { BusinessSettings, HandoffOptions, Language } from '../types.js';
+import type { BusinessSettings } from '../types.js';
 
 export const SETTING_KEYS = [
   'delivery_areas',
@@ -73,31 +73,4 @@ export function setSettings(patch: Partial<Record<SettingKey, string | null>>, a
 export function missingSettings(): SettingKey[] {
   const settings = getSettings();
   return SETTING_KEYS.filter((k) => k !== 'currency' && !settings[k]);
-}
-
-/**
- * Builds the human-handoff options (spec §5.3). Any channel the owner has not
- * configured is simply absent — the widget renders what exists.
- */
-export function handoffOptions(summary: string, language: Language): HandoffOptions {
-  const s = getSettings();
-  let whatsappUrl: string | null = null;
-
-  if (s.whatsapp_number) {
-    const digits = s.whatsapp_number.replace(/[^\d]/g, '');
-    if (digits) {
-      const preface =
-        language === 'ar'
-          ? 'مرحباً، كنت أتحدث مع المساعد الذكي في Wellness World وأحتاج مساعدة بشرية.'
-          : 'Hello, I was chatting with the Wellness World assistant and need help from a person.';
-      whatsappUrl = `https://wa.me/${digits}?text=${encodeURIComponent(`${preface}\n\n${summary}`)}`;
-    }
-  }
-
-  return {
-    whatsapp_url: whatsappUrl,
-    phone: s.phone_number,
-    live_chat_note: s.live_chat_note,
-    hours: s.service_hours,
-  };
 }

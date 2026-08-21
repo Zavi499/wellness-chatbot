@@ -1,28 +1,23 @@
 /**
  * One turn of conversation (spec §1.3).
  *
- * Order matters and is not negotiable: safety screening runs BEFORE the model
- * is ever called, so an emergency short-circuits to approved copy without an
- * API round trip and without any chance of the model selling into a crisis.
+ * The rule-based emergency/pharmacist-review safety screen that used to run
+ * before every model call was removed by explicit store-owner decision, along
+ * with the "escalate to a human" tool and the selling-block it triggered —
+ * see `safety/engine.ts`. Sensitive-data detection (§5.4) is unrelated to
+ * that removal and still runs on every turn.
  */
 import { randomUUID } from 'node:crypto';
 import type OpenAI from 'openai';
 import { openai, models } from '../openai/client.js';
 import { config } from '../config.js';
-import { getSettings, handoffOptions } from '../settings/repository.js';
+import { getSettings } from '../settings/repository.js';
 import { detectLanguage, DEFAULT_LANGUAGE } from '../language/detect.js';
-import { screenMessage, recordEscalation, summarizeForHandoff } from '../safety/engine.js';
-import { HANDOFF_NOTICE, NO_SELLING_REMINDER } from '../safety/templates.js';
+import { containsSensitiveData } from '../safety/engine.js';
+import { SENSITIVE_DATA_WARNING } from '../safety/templates.js';
 import { MASTER_SYSTEM_PROMPT, buildContextMessage } from './prompts/system.js';
 import { TOOL_DEFINITIONS, executeTool, type ToolOutcome } from './tools.js';
-import {
-  appendTurn,
-  blockSelling,
-  lockLanguage,
-  recentHistory,
-  resumeOrCreate,
-  saveSession,
-} from './session.js';
+import { appendTurn, lockLanguage, recentHistory, resumeOrCreate, saveSession } from './session.js';
 import {
   nextQuestion,
   questionnaireForTopic,
@@ -60,42 +55,8 @@ export async function handleTurn(input: TurnInput): Promise<ChatResponse> {
     logEvent('questionnaire_answered', session.session_id, input.answer);
   }
 
-  // --- 3. Safety screen, before the model (spec §1.3 step 4, §5) -----------
-  const screen = screenMessage(session, message, language);
-
-  if (screen.triggered && screen.urgency) {
-    const reason = screen.matches.map((m) => m.description).join('; ');
-    blockSelling(session, reason, screen.urgency);
-    recordEscalation({
-      session,
-      urgency: screen.urgency,
-      reason,
-      source: 'rule',
-      matchedRule: screen.matches.map((m) => m.rule_id).join(','),
-      language,
-    });
-
-    const text = [screen.sensitiveDataWarning, screen.message, HANDOFF_NOTICE[language]]
-      .filter(Boolean)
-      .join('\n\n');
-
-    appendTurn(session, 'assistant', text);
-    saveSession(session);
-
-    return {
-      session_id: session.session_id,
-      message: text,
-      language,
-      quick_replies: [],
-      escalation: {
-        urgency: screen.urgency,
-        reason,
-        handoff: screen.handoff ?? handoffOptions(summarizeForHandoff(session, message), language),
-      },
-      message_id: randomUUID(),
-      selling_blocked: session.escalation.selling_blocked,
-    };
-  }
+  // --- 3. Sensitive data (§5.4) — unrelated to escalation, still checked ---
+  const sensitiveDataWarning = containsSensitiveData(message) ? SENSITIVE_DATA_WARNING[language] : null;
 
   // --- 4. Assemble context for the model -----------------------------------
   const settings = getSettings();
@@ -110,15 +71,13 @@ export async function handleTurn(input: TurnInput): Promise<ChatResponse> {
     answers: session.answers,
     settings,
     retrieved,
-    sellingBlocked: session.escalation.selling_blocked,
-    nextQuestion:
-      step?.question && !session.escalation.selling_blocked
-        ? {
-            key: step.question.key,
-            text: promptFor(step.question, language),
-            options: step.question.options.map((o) => optionLabel(o, language)),
-          }
-        : null,
+    nextQuestion: step?.question
+      ? {
+          key: step.question.key,
+          text: promptFor(step.question, language),
+          options: step.question.options.map((o) => optionLabel(o, language)),
+        }
+      : null,
     progress: step && !step.done ? { step: step.step, total: step.total } : null,
   });
 
@@ -131,7 +90,6 @@ export async function handleTurn(input: TurnInput): Promise<ChatResponse> {
   // --- 5. Model call with tool loop ----------------------------------------
   let finalText = '';
   let recommendations: ChatResponse['recommendations'];
-  let modelEscalation: { urgency: 'emergency' | 'pharmacist_review'; reason: string } | null = null;
 
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
@@ -162,7 +120,6 @@ export async function handleTurn(input: TurnInput): Promise<ChatResponse> {
         });
 
         if (outcome.recommendations) recommendations = outcome.recommendations;
-        if (outcome.escalation) modelEscalation = outcome.escalation;
 
         messages.push({ role: 'tool', tool_call_id: call.id, content: outcome.result });
       }
@@ -171,8 +128,8 @@ export async function handleTurn(input: TurnInput): Promise<ChatResponse> {
     // A model or network failure must not look like a confident answer.
     const text =
       language === 'ar'
-        ? 'عذراً، حدث خلل تقني عندي الآن. يمكنني توصيلك بفريقنا، أو يمكنك المحاولة مرة أخرى بعد قليل.'
-        : "Sorry — something went wrong on my side just now. I can connect you with our team, or you can try again in a moment.";
+        ? 'عذراً، حدث خلل تقني عندي الآن. يمكنك المحاولة مرة أخرى بعد قليل.'
+        : 'Sorry — something went wrong on my side just now. You can try again in a moment.';
     appendTurn(session, 'assistant', text);
     saveSession(session);
     return {
@@ -181,50 +138,19 @@ export async function handleTurn(input: TurnInput): Promise<ChatResponse> {
       language,
       quick_replies: [],
       message_id: randomUUID(),
-      selling_blocked: session.escalation.selling_blocked,
-      escalation: {
-        urgency: 'pharmacist_review',
-        reason: `Backend error: ${err instanceof Error ? err.message : String(err)}`,
-        handoff: handoffOptions(summarizeForHandoff(session, message), language),
-      },
-    };
-  }
-
-  // --- 6. Model-initiated escalation lands in the same log -----------------
-  let escalationPayload: ChatResponse['escalation'];
-  if (modelEscalation) {
-    blockSelling(session, modelEscalation.reason, modelEscalation.urgency);
-    recordEscalation({
-      session,
-      urgency: modelEscalation.urgency,
-      reason: modelEscalation.reason,
-      source: 'model',
-      language,
-    });
-    escalationPayload = {
-      urgency: modelEscalation.urgency,
-      reason: modelEscalation.reason,
-      handoff: handoffOptions(summarizeForHandoff(session, message), language),
     };
   }
 
   if (!finalText.trim()) {
-    finalText = session.escalation.selling_blocked
-      ? NO_SELLING_REMINDER[language]
-      : language === 'ar'
-        ? 'كيف يمكنني مساعدتك أكثر؟'
-        : 'How else can I help?';
+    finalText = language === 'ar' ? 'كيف يمكنني مساعدتك أكثر؟' : 'How else can I help?';
   }
 
-  if (screen.sensitiveDataWarning) {
-    finalText = `${screen.sensitiveDataWarning}\n\n${finalText}`;
+  if (sensitiveDataWarning) {
+    finalText = `${sensitiveDataWarning}\n\n${finalText}`;
   }
 
-  // --- 7. Quick replies come from the questionnaire config, not the model ---
-  const quickReplies: QuickReply[] =
-    step?.question && !session.escalation.selling_blocked && !escalationPayload
-      ? quickRepliesFor(step.question, language)
-      : [];
+  // --- 6. Quick replies come from the questionnaire config, not the model ---
+  const quickReplies: QuickReply[] = step?.question ? quickRepliesFor(step.question, language) : [];
 
   appendTurn(session, 'assistant', finalText);
   saveSession(session);
@@ -236,10 +162,8 @@ export async function handleTurn(input: TurnInput): Promise<ChatResponse> {
     language,
     quick_replies: quickReplies,
     recommendations,
-    escalation: escalationPayload,
     progress: step && !step.done ? { step: step.step, total: step.total } : undefined,
     message_id: randomUUID(),
-    selling_blocked: session.escalation.selling_blocked,
   };
 }
 
@@ -274,7 +198,6 @@ export function openingResponse(language: Language, greeting: string): ChatRespo
     language,
     quick_replies: [],
     message_id: randomUUID(),
-    selling_blocked: false,
   };
 }
 

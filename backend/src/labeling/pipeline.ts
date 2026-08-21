@@ -352,13 +352,16 @@ export function resetUnreviewedLabels(
     draftsRemoved = Number(result.changes ?? 0);
   }
 
-  logAudit({
-    entity: 'product',
-    entityId: 'bulk',
-    action: 'ai_labels_reset',
-    actor,
-    detail: { products_reset: targets.length, drafts_removed: draftsRemoved },
-  });
+  logAudit(
+    {
+      entity: 'product',
+      entityId: 'bulk',
+      action: 'ai_labels_reset',
+      actor,
+      detail: { products_reset: targets.length, drafts_removed: draftsRemoved },
+    },
+    conn,
+  );
 
   return { products_reset: targets.length, drafts_removed: draftsRemoved };
 }
@@ -393,13 +396,16 @@ export function autoVerifyPendingDrafts(
       .run(now, actor ?? 'ai:auto', 'Bulk auto-verified — direct-labeling migration.', id);
   }
 
-  logAudit({
-    entity: 'product',
-    entityId: 'bulk',
-    action: 'ai_labels_auto_verified_bulk',
-    actor,
-    detail: { count: pending.length },
-  });
+  logAudit(
+    {
+      entity: 'product',
+      entityId: 'bulk',
+      action: 'ai_labels_auto_verified_bulk',
+      actor,
+      detail: { count: pending.length },
+    },
+    conn,
+  );
 
   return { verified: pending.length };
 }
@@ -491,13 +497,16 @@ export function applyReview(
         `UPDATE label_drafts SET status = 'rejected', reviewed_at = ?, reviewed_by = ?, review_note = ? WHERE id = ?`,
       )
       .run(nowIso(), decision.reviewer, decision.note ?? null, decision.draftId);
-    logAudit({
-      entity: 'label_draft',
-      entityId: String(decision.draftId),
-      action: 'rejected',
-      actor: decision.reviewer,
-      detail: { product_id: productId, note: decision.note ?? null },
-    });
+    logAudit(
+      {
+        entity: 'label_draft',
+        entityId: String(decision.draftId),
+        action: 'rejected',
+        actor: decision.reviewer,
+        detail: { product_id: productId, note: decision.note ?? null },
+      },
+      conn,
+    );
     return { product_id: productId, status: product.verification_status };
   }
 
@@ -520,16 +529,19 @@ export function applyReview(
     )
     .run(nowIso(), decision.reviewer, decision.note ?? null, decision.draftId);
 
-  logAudit({
-    entity: 'product',
-    entityId: String(productId),
-    action: `verified:${status}`,
-    actor: decision.reviewer,
-    detail: {
-      pharmacist: decision.reviewerIsPharmacist,
-      edited_fields: Object.keys(decision.edits ?? {}),
+  logAudit(
+    {
+      entity: 'product',
+      entityId: String(productId),
+      action: `verified:${status}`,
+      actor: decision.reviewer,
+      detail: {
+        pharmacist: decision.reviewerIsPharmacist,
+        edited_fields: Object.keys(decision.edits ?? {}),
+      },
     },
-  });
+    conn,
+  );
 
   return { product_id: productId, status };
 }

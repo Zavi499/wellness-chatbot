@@ -132,12 +132,19 @@ These come from the spec and are enforced in code, not just in prompts:
   true when a user holding `wwc_pharmacist_review` did the approval — never by
   the direct-labeling path, never by a non-pharmacist admin. It currently
   feeds a small scoring bonus for child-suitable products (§4.6), nothing more.
-- **Safety screening runs before the model.** An emergency short-circuits to
-  approved copy with no API call, stops selling for the rest of the
-  conversation, and is logged (§5.1).
+- **No escalation-to-human pathway.** By explicit store-owner decision, the
+  rule-based emergency/pharmacist-review safety screen, the model's
+  `escalate_to_human` tool, and the selling-block they used to trigger were
+  all removed — a deliberate departure from the original spec (§5.1, §5.2).
+  Sensitive-data detection (§5.4) is unrelated to that removal and still runs
+  on every turn; see `backend/src/safety/engine.ts`.
+- **KB answers go live directly.** A knowledge-base entry becomes usable the
+  moment both languages have an answer — no separate approval step, another
+  explicit store-owner decision. An incomplete entry is never served; see
+  `backend/src/kb/repository.ts`.
 - **Unconfirmed business facts stay unconfirmed.** Delivery fees, hours and the
   returns policy are read live from Business Settings. An empty field makes the
-  assistant offer to check with a human rather than state a value (§8.5).
+  assistant say so plainly rather than state a value (§8.5).
 - **No padding.** If fewer than three products genuinely fit, the customer is
   told so (§4.6).
 - **Never ask the same question twice.** Enforced by the questionnaire engine

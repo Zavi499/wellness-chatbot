@@ -49,11 +49,11 @@ class WWC_Settings {
 			),
 			'whatsapp_number'         => array(
 				'label' => __( 'WhatsApp number', 'wellness-chatbot' ),
-				'help'  => __( 'Used for the human handover deep link. Include the country code.', 'wellness-chatbot' ),
+				'help'  => __( 'Shared with a customer who asks how to reach you. Include the country code.', 'wellness-chatbot' ),
 			),
 			'phone_number'            => array(
 				'label' => __( 'Phone number', 'wellness-chatbot' ),
-				'help'  => __( 'Fallback contact shown when WhatsApp is not configured.', 'wellness-chatbot' ),
+				'help'  => __( 'Shared with a customer who asks how to reach you.', 'wellness-chatbot' ),
 			),
 			'live_chat_note'          => array(
 				'label' => __( 'Live chat note', 'wellness-chatbot' ),

@@ -7,11 +7,17 @@
  */
 
 .wwc-widget-root {
-	--wwc-radius: 14px;
-	--wwc-text: #1d2327;
-	--wwc-muted: #646970;
-	--wwc-line: #e2e4e7;
+	--wwc-radius: 16px;
+	--wwc-radius-lg: 22px;
+	--wwc-text: #1a1d23;
+	--wwc-muted: #667085;
+	--wwc-line: #e7e4ec;
 	--wwc-bg: #ffffff;
+	--wwc-shadow-xs: 0 1px 2px rgba(20, 10, 30, 0.06);
+	--wwc-shadow-sm: 0 2px 10px rgba(20, 10, 30, 0.08);
+	--wwc-shadow-md: 0 10px 28px rgba(20, 10, 30, 0.14);
+	--wwc-shadow-lg: 0 24px 64px rgba(20, 10, 30, 0.24);
+	--wwc-ease: cubic-bezier(0.22, 1, 0.36, 1);
 	font-family: inherit;
 	color: var(--wwc-text);
 	line-height: 1.5;
@@ -24,16 +30,21 @@
 	box-sizing: inherit;
 }
 
-/* --- Launcher -------------------------------------------------------------- */
+/* --- Launcher ---------------------------------------------------------------
+   Bottom-center, not bottom-right — this store already has a WhatsApp bubble
+   pinned to the right corner, so the two never overlap. Same position on
+   mobile and desktop; desktop additionally gets a pulse ring and a hover
+   lift, gated behind (min-width: 783px) to match the WP admin breakpoint
+   already used elsewhere in this plugin. */
 .wwc-launcher {
 	position: fixed;
-	inset-block-end: 20px;
-	inset-inline-end: 20px;
+	inset-block-end: 24px;
+	inset-inline-start: 50%;
 	z-index: 99998;
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
-	padding: 12px 20px;
+	padding: 12px 22px;
 	border: 0;
 	border-radius: 999px;
 	background: var(--wwc-primary);
@@ -41,9 +52,25 @@
 	font-size: 15px;
 	font-weight: 600;
 	cursor: pointer;
-	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+	box-shadow: 0 8px 24px rgba(var(--wwc-primary-rgb, 147, 34, 170), 0.35), 0 2px 8px rgba(0, 0, 0, 0.14);
 	/* Large tap target for mobile (spec §9.3). */
 	min-height: 48px;
+	transform: translateX(-50%);
+	transform-origin: center bottom;
+	animation:
+		wwc-launcher-enter 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+		wwc-launcher-float 3.6s ease-in-out 0.65s infinite;
+	transition: box-shadow 0.25s ease, background 0.2s ease;
+}
+
+.wwc-launcher::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	pointer-events: none;
+	box-shadow: 0 0 0 0 rgba(var(--wwc-primary-rgb, 147, 34, 170), 0.45);
+	opacity: 0;
 }
 
 .wwc-launcher:hover,
@@ -60,6 +87,32 @@
 .wwc-launcher-icon {
 	font-size: 18px;
 	line-height: 1;
+	display: inline-block;
+	transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.wwc-launcher[aria-expanded="true"] .wwc-launcher-icon {
+	transform: rotate(90deg) scale(0.9);
+}
+
+@keyframes wwc-launcher-enter {
+	from {
+		opacity: 0;
+		transform: translateX(-50%) translateY(28px) scale(0.82);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(-50%) translateY(0) scale(1);
+	}
+}
+
+@keyframes wwc-launcher-float {
+	0%, 100% {
+		transform: translateX(-50%) translateY(0) scale(1);
+	}
+	50% {
+		transform: translateX(-50%) translateY(-5px) scale(1.02);
+	}
 }
 
 @media (max-width: 480px) {
@@ -72,11 +125,53 @@
 	}
 }
 
+/* Desktop: a wider hover target than touch usually offers, so a lift +
+   pulse ring reads as an invitation rather than noise on a small screen. */
+@media (min-width: 783px) {
+	.wwc-launcher::after {
+		animation: wwc-launcher-ping 2.8s ease-out 1.6s infinite;
+	}
+
+	.wwc-launcher:hover {
+		box-shadow: 0 14px 34px rgba(var(--wwc-primary-rgb, 147, 34, 170), 0.42), 0 4px 12px rgba(0, 0, 0, 0.16);
+	}
+
+	.wwc-launcher:hover .wwc-launcher-icon {
+		transform: scale(1.12) rotate(-6deg);
+	}
+
+	.wwc-launcher[aria-expanded="true"]:hover .wwc-launcher-icon {
+		transform: rotate(90deg) scale(0.9);
+	}
+}
+
+@keyframes wwc-launcher-ping {
+	0% {
+		box-shadow: 0 0 0 0 rgba(var(--wwc-primary-rgb, 147, 34, 170), 0.45);
+		opacity: 1;
+	}
+	70%, 100% {
+		box-shadow: 0 0 0 22px rgba(var(--wwc-primary-rgb, 147, 34, 170), 0);
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wwc-launcher {
+		animation: none;
+	}
+
+	.wwc-launcher::after {
+		animation: none;
+	}
+}
+
 /* --- Panel ----------------------------------------------------------------- */
 .wwc-panel {
 	position: fixed;
-	inset-block-end: 84px;
-	inset-inline-end: 20px;
+	inset-block-end: 88px;
+	inset-inline-start: 50%;
+	transform: translateX(-50%);
 	z-index: 99999;
 	display: flex;
 	flex-direction: column;
@@ -84,44 +179,129 @@
 	height: min(620px, calc(100vh - 120px));
 	background: var(--wwc-bg);
 	border: 1px solid var(--wwc-line);
-	border-radius: var(--wwc-radius);
-	box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
+	border-radius: var(--wwc-radius-lg);
+	box-shadow: var(--wwc-shadow-lg);
 	overflow: hidden;
+}
+
+/* `display: flex` above otherwise beats the browser's own `[hidden] {
+   display: none }` default — author-stylesheet rules always win over
+   user-agent ones regardless of selector specificity, so without this the
+   panel never actually hides when index.ts sets `.hidden = true`. */
+.wwc-panel[hidden] {
+	display: none;
+}
+
+/* A soft pop each time the panel opens (the `wwc-open` class toggles on
+   `.wwc-widget-root`, and the display:none → flex transition — see above —
+   is what lets the animation replay every time, not just on first paint). */
+@keyframes wwc-panel-in {
+	from {
+		opacity: 0;
+		transform: translateX(-50%) translateY(16px) scale(0.96);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(-50%) translateY(0) scale(1);
+	}
+}
+
+@keyframes wwc-panel-in-full {
+	from {
+		opacity: 0;
+		transform: translateY(24px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.wwc-widget-root.wwc-open[data-mode="launcher"] .wwc-panel {
+	animation: wwc-panel-in 0.32s var(--wwc-ease) both;
 }
 
 /* Inline placement via the shortcode sits in the page flow instead. */
 .wwc-widget-root[data-mode="inline"] .wwc-panel {
 	position: static;
+	transform: none;
 	width: 100%;
 	height: 560px;
 	box-shadow: none;
+	animation: none;
 }
 
 @media (max-width: 480px) {
 	.wwc-widget-root[data-mode="launcher"] .wwc-panel {
 		inset: 0;
+		transform: none;
 		width: 100vw;
 		height: 100dvh;
 		border-radius: 0;
 		border: 0;
 	}
+
+	.wwc-widget-root.wwc-open[data-mode="launcher"] .wwc-panel {
+		animation: wwc-panel-in-full 0.32s var(--wwc-ease) both;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wwc-widget-root.wwc-open[data-mode="launcher"] .wwc-panel {
+		animation: none;
+	}
 }
 
 .wwc-header {
+	position: relative;
+	overflow: hidden;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
-	padding: 14px 16px;
-	background: var(--wwc-primary);
+	padding: 16px 18px;
+	background: linear-gradient(135deg, var(--wwc-primary) 0%, var(--wwc-primary-hover) 100%);
 	color: #fff;
+}
+
+/* Purely decorative corner glow — sits behind the title/close button, see
+   `.wwc-header > *` below for why those need position:relative to paint
+   above it. */
+.wwc-header::before {
+	content: "";
+	position: absolute;
+	inset-inline-end: -40px;
+	inset-block-start: -60px;
+	width: 160px;
+	height: 160px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.08);
+	pointer-events: none;
+}
+
+.wwc-header > * {
+	position: relative;
+	z-index: 1;
 }
 
 .wwc-title {
 	margin: 0;
-	font-size: 15px;
-	font-weight: 600;
+	font-size: 15.5px;
+	font-weight: 700;
 	color: #fff;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.wwc-title::before {
+	content: "";
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: #4ade80;
+	box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25);
+	flex-shrink: 0;
 }
 
 .wwc-icon-btn {
@@ -132,13 +312,15 @@
 	line-height: 1;
 	cursor: pointer;
 	padding: 4px 8px;
-	border-radius: 6px;
+	border-radius: 8px;
 	min-width: 34px;
 	min-height: 34px;
+	transition: background 0.15s ease, transform 0.15s var(--wwc-ease);
 }
 
 .wwc-icon-btn:hover {
 	background: rgba(255, 255, 255, 0.18);
+	transform: scale(1.06);
 }
 
 /* --- Progress -------------------------------------------------------------- */
@@ -146,11 +328,16 @@
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 8px 16px;
+	padding: 10px 16px;
 	border-block-end: 1px solid var(--wwc-line);
 	background: var(--wwc-surface);
 	font-size: 12px;
 	color: var(--wwc-primary-text);
+}
+
+/* Same reasoning as .wwc-panel[hidden] above. */
+.wwc-progress[hidden] {
+	display: none;
 }
 
 .wwc-progress-label {
@@ -160,7 +347,7 @@
 
 .wwc-progress-bar {
 	flex: 1;
-	height: 6px;
+	height: 7px;
 	background: var(--wwc-100);
 	border-radius: 999px;
 	overflow: hidden;
@@ -169,26 +356,46 @@
 .wwc-progress-fill {
 	display: block;
 	height: 100%;
-	background: var(--wwc-primary);
-	transition: width 0.25s ease;
+	background: linear-gradient(90deg, var(--wwc-primary), var(--wwc-primary-hover));
+	border-radius: 999px;
+	transition: width 0.3s var(--wwc-ease);
 }
 
 /* --- Messages -------------------------------------------------------------- */
 .wwc-messages {
 	flex: 1;
 	overflow-y: auto;
-	padding: 16px;
+	overflow-x: hidden;
+	padding: 18px 16px;
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	gap: 12px;
+	background: linear-gradient(180deg, var(--wwc-surface) 0%, #ffffff 220px);
+	scrollbar-width: thin;
+	scrollbar-color: var(--wwc-300) transparent;
+}
+
+.wwc-messages::-webkit-scrollbar {
+	width: 6px;
+}
+
+.wwc-messages::-webkit-scrollbar-thumb {
+	background: var(--wwc-300);
+	border-radius: 999px;
+}
+
+.wwc-messages::-webkit-scrollbar-track {
+	background: transparent;
 }
 
 .wwc-msg {
 	max-width: 88%;
-	padding: 10px 14px;
+	padding: 11px 15px;
 	border-radius: var(--wwc-radius);
 	font-size: 14px;
 	word-wrap: break-word;
+	box-shadow: var(--wwc-shadow-xs);
+	animation: wwc-msg-in 0.32s var(--wwc-ease) both;
 }
 
 .wwc-msg p {
@@ -203,23 +410,36 @@
 	align-self: flex-start;
 	background: var(--wwc-surface);
 	color: var(--wwc-text);
-	border-start-start-radius: 4px;
+	border-start-start-radius: 6px;
 }
 
 .wwc-msg-user {
 	align-self: flex-end;
-	background: var(--wwc-primary);
+	background: linear-gradient(135deg, var(--wwc-primary) 0%, var(--wwc-primary-hover) 100%);
 	color: #fff;
-	border-end-end-radius: 4px;
+	border-end-end-radius: 6px;
+	box-shadow: 0 4px 14px rgba(var(--wwc-primary-rgb, 147, 34, 170), 0.28);
 }
 
 .wwc-msg-system {
 	align-self: center;
-	background: #fcebeb;
+	background: #fdecec;
 	color: #b32d2e;
 	font-size: 13px;
 	text-align: center;
 	max-width: 100%;
+	box-shadow: none;
+}
+
+@keyframes wwc-msg-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px) scale(0.97);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
 }
 
 .wwc-thinking {
@@ -252,7 +472,8 @@
 
 @media (prefers-reduced-motion: reduce) {
 	.wwc-dot,
-	.wwc-progress-fill {
+	.wwc-progress-fill,
+	.wwc-msg {
 		animation: none;
 		transition: none;
 	}
@@ -281,21 +502,29 @@
 }
 
 .wwc-chip {
-	border: 1px solid var(--wwc-300);
+	border: 1.5px solid var(--wwc-300);
 	background: #fff;
 	color: var(--wwc-primary-text);
 	border-radius: 999px;
 	padding: 9px 16px;
 	font-size: 13px;
+	font-weight: 500;
 	cursor: pointer;
 	/* Comfortable tap target on mobile. */
 	min-height: 40px;
+	transition: transform 0.15s var(--wwc-ease), background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .wwc-chip:hover,
 .wwc-chip:focus-visible {
 	background: var(--wwc-50);
 	border-color: var(--wwc-primary);
+	transform: translateY(-1px);
+	box-shadow: var(--wwc-shadow-xs);
+}
+
+.wwc-chip:active {
+	transform: translateY(0) scale(0.97);
 }
 
 /* --- Composer -------------------------------------------------------------- */
@@ -303,7 +532,7 @@
 	display: flex;
 	gap: 8px;
 	align-items: flex-end;
-	padding: 12px 16px;
+	padding: 12px 14px 16px;
 	border-block-start: 1px solid var(--wwc-line);
 	background: #fff;
 }
@@ -312,17 +541,21 @@
 	flex: 1;
 	resize: none;
 	border: 1px solid var(--wwc-line);
-	border-radius: 10px;
-	padding: 10px 12px;
+	border-radius: 20px;
+	padding: 11px 16px;
 	font: inherit;
 	font-size: 14px;
 	max-height: 120px;
 	color: var(--wwc-text);
-	background: #fff;
+	background: var(--wwc-surface);
+	transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .wwc-input:focus-visible {
 	border-color: var(--wwc-primary);
+	background: #fff;
+	box-shadow: 0 0 0 3px rgba(var(--wwc-primary-rgb, 147, 34, 170), 0.22);
+	outline: none;
 }
 
 .wwc-input:disabled {
@@ -334,24 +567,32 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	border-radius: 8px;
+	border-radius: 10px;
 	font-size: 13px;
 	font-weight: 600;
-	padding: 10px 14px;
+	padding: 10px 16px;
 	cursor: pointer;
 	border: 1px solid transparent;
 	text-decoration: none;
 	min-height: 40px;
+	transition: transform 0.15s var(--wwc-ease), box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
 .wwc-btn-primary {
 	background: var(--wwc-primary);
 	color: #fff;
+	box-shadow: var(--wwc-shadow-xs);
 }
 
 .wwc-btn-primary:hover:not(:disabled) {
 	background: var(--wwc-primary-hover);
 	color: #fff;
+	transform: translateY(-1px);
+	box-shadow: var(--wwc-shadow-sm);
+}
+
+.wwc-btn-primary:active:not(:disabled) {
+	transform: translateY(0);
 }
 
 .wwc-btn-ghost {
@@ -363,6 +604,8 @@
 .wwc-btn-ghost:hover {
 	background: var(--wwc-50);
 	color: var(--wwc-primary-text);
+	border-color: var(--wwc-primary);
+	transform: translateY(-1px);
 }
 
 .wwc-btn-link {
@@ -374,9 +617,28 @@
 	font-weight: 500;
 }
 
+.wwc-btn-link:hover {
+	color: var(--wwc-primary-hover);
+}
+
 .wwc-btn:disabled {
 	opacity: 0.55;
 	cursor: not-allowed;
+	transform: none !important;
+	box-shadow: none !important;
+}
+
+/* The composer's send button gets its own pill/gradient treatment so the
+   composer row reads like a modern messaging app; other primary buttons
+   (add to cart, talk to a human) keep the standard rectangular style. */
+.wwc-send {
+	border-radius: 20px;
+	padding: 11px 22px;
+	background: linear-gradient(135deg, var(--wwc-primary) 0%, var(--wwc-primary-hover) 100%);
+}
+
+.wwc-compare-all {
+	align-self: center;
 }
 
 /* --- Recommendation cards -------------------------------------------------- */
@@ -389,21 +651,29 @@
 .wwc-card {
 	border: 1px solid var(--wwc-line);
 	border-radius: var(--wwc-radius);
-	padding: 12px;
+	padding: 14px;
 	background: #fff;
+	box-shadow: var(--wwc-shadow-xs);
+	transition: transform 0.2s var(--wwc-ease), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.wwc-card:hover {
+	transform: translateY(-2px);
+	box-shadow: var(--wwc-shadow-md);
+	border-color: var(--wwc-300);
 }
 
 .wwc-card-label {
 	display: inline-block;
-	background: var(--wwc-100);
+	background: linear-gradient(135deg, var(--wwc-100), var(--wwc-200));
 	color: var(--wwc-primary-text);
 	font-size: 11px;
 	font-weight: 700;
 	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	padding: 3px 9px;
+	letter-spacing: 0.05em;
+	padding: 4px 10px;
 	border-radius: 999px;
-	margin-bottom: 8px;
+	margin-bottom: 10px;
 }
 
 .wwc-card-head {
@@ -416,9 +686,14 @@
 	width: 56px;
 	height: 56px;
 	object-fit: cover;
-	border-radius: 8px;
+	border-radius: 10px;
 	border: 1px solid var(--wwc-line);
 	flex-shrink: 0;
+}
+
+.wwc-card-headtext {
+	flex: 1;
+	min-width: 0;
 }
 
 .wwc-card-name {
@@ -434,22 +709,33 @@
 }
 
 .wwc-stock {
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
 	font-size: 11px;
 	font-weight: 600;
-	padding: 2px 8px;
+	padding: 3px 9px;
 	border-radius: 999px;
-	margin-top: 4px;
+	margin-top: 6px;
+}
+
+.wwc-stock::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: currentColor;
+	flex-shrink: 0;
 }
 
 .wwc-stock-in {
-	background: #edfaef;
-	color: #007017;
+	background: #e8faed;
+	color: #16883d;
 }
 
 .wwc-stock-out {
-	background: #fcebeb;
-	color: #b32d2e;
+	background: #fdecec;
+	color: #c62f2f;
 }
 
 .wwc-card-bestfor {
@@ -500,14 +786,32 @@
 	display: flex;
 	flex-direction: column;
 	z-index: 2;
+	animation: wwc-drawer-in 0.28s var(--wwc-ease) both;
+}
+
+@keyframes wwc-drawer-in {
+	from {
+		opacity: 0;
+		transform: translateY(14px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wwc-drawer {
+		animation: none;
+	}
 }
 
 .wwc-drawer-head {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 14px 16px;
-	background: var(--wwc-primary);
+	padding: 16px 18px;
+	background: linear-gradient(135deg, var(--wwc-primary) 0%, var(--wwc-primary-hover) 100%);
 	color: #fff;
 }
 
@@ -520,7 +824,18 @@
 .wwc-drawer-body {
 	flex: 1;
 	overflow: auto;
-	padding: 12px;
+	padding: 14px;
+	scrollbar-width: thin;
+	scrollbar-color: var(--wwc-300) transparent;
+}
+
+.wwc-drawer-body::-webkit-scrollbar {
+	width: 6px;
+}
+
+.wwc-drawer-body::-webkit-scrollbar-thumb {
+	background: var(--wwc-300);
+	border-radius: 999px;
 }
 
 .wwc-compare {
@@ -544,24 +859,7 @@
 	top: 0;
 }
 
-/* --- Handoff & feedback ---------------------------------------------------- */
-.wwc-handoff {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-	align-items: center;
-	padding: 12px;
-	background: var(--wwc-surface);
-	border-radius: var(--wwc-radius);
-}
-
-.wwc-handoff-note {
-	margin: 0;
-	font-size: 12px;
-	color: var(--wwc-muted);
-	flex-basis: 100%;
-}
-
+/* --- Feedback ---------------------------------------------------------------- */
 .wwc-feedback {
 	display: flex;
 	align-items: center;
@@ -580,19 +878,26 @@
 	color: var(--wwc-muted);
 	min-width: 32px;
 	min-height: 32px;
+	border-radius: 50%;
 }
 
 .wwc-feedback .wwc-icon-btn:hover {
 	background: var(--wwc-100);
+	transform: scale(1.1);
 }
 
 .wwc-feedback-input {
 	flex: 1;
 	min-width: 140px;
 	border: 1px solid var(--wwc-line);
-	border-radius: 6px;
-	padding: 6px 8px;
+	border-radius: 8px;
+	padding: 6px 10px;
 	font-size: 12px;
+}
+
+.wwc-feedback-input:focus-visible {
+	border-color: var(--wwc-primary);
+	outline: none;
 }
 
 /* --- High contrast --------------------------------------------------------- */

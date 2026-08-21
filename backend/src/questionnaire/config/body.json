@@ -43,12 +43,7 @@
         { "value": "underarms", "label_en": "Underarms", "label_ar": "تحت الإبط" },
         { "value": "back_chest", "label_en": "Back or chest", "label_ar": "الظهر أو الصدر" },
         { "value": "intimate", "label_en": "Intimate area", "label_ar": "المنطقة الحساسة" }
-      ],
-      "escalate": {
-        "values": ["intimate"],
-        "urgency": "pharmacist_review",
-        "reason": "Intimate-area care needs professional assessment rather than an automated recommendation."
-      }
+      ]
     },
     {
       "key": "skin_condition",
@@ -62,12 +57,7 @@
         { "value": "unexplained_rash", "label_en": "An unexplained rash", "label_ar": "طفح جلدي غير مفسر" },
         { "value": "broken_skin", "label_en": "Broken or bleeding", "label_ar": "متشقق أو ينزف" },
         { "value": "infection_signs", "label_en": "Warm, swollen or oozing", "label_ar": "ساخن أو منتفخ أو يفرز سوائل" }
-      ],
-      "escalate": {
-        "values": ["severe_itching", "unexplained_rash", "broken_skin", "infection_signs"],
-        "urgency": "pharmacist_review",
-        "reason": "Broken skin, unexplained rash, severe itching or possible infection needs professional assessment before any product recommendation."
-      }
+      ]
     },
     {
       "key": "sensitivity_level",

@@ -1,116 +1,18 @@
 /**
- * Safety trigger tests (spec §5.1, §5.2, §15 phase 7).
+ * Sensitive-data detection (spec §5.4) and the product-labeling pharmacist
+ * gate (spec §3.3 step 4).
  *
- * These are the tests that matter most: every trigger in Section 5 has to fire
- * in both English and Arabic, and an emergency must outrank everything else.
+ * The rule-based emergency/pharmacist-review escalation engine that used to
+ * be tested here was removed by explicit store-owner decision, along with
+ * the chat safety-trigger rules it was built on. Sensitive-data detection is
+ * unrelated to that removal and still runs on every turn. The pharmacist
+ * gate below is also unrelated — it is the AI-labeling pipeline's category
+ * flag for vitamins/pregnancy-adjacent products, not a chat escalation.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectTriggers, highestUrgency, EMERGENCY_RULES, PHARMACIST_RULES } from '../src/safety/triggers.js';
 import { containsSensitiveData } from '../src/safety/engine.js';
 import { evaluatePharmacistGate } from '../src/labeling/gate.js';
-
-function urgencyOf(message: string) {
-  return highestUrgency(detectTriggers(message));
-}
-
-describe('emergency triggers (§5.1)', () => {
-  const cases: [string, string][] = [
-    ['breathing', "I used the mask and now I can't breathe properly"],
-    ['swelling', 'my face is swelling up after the cream'],
-    ['anaphylaxis', 'I think I am having a severe allergic reaction'],
-    ['fainting', 'she fainted after taking it'],
-    ['chest pain', 'I have chest pain right now'],
-    ['stroke', 'my speech is slurred and my arm went numb suddenly'],
-    ['bleeding', 'the cut is bleeding heavily and it will not stop'],
-    ['poisoning', 'my son swallowed a whole bottle of the tablets'],
-    ['eye', 'severe eye pain since the serum went in'],
-    ['chemical', 'chemical burn from the peel'],
-    ['rash with fever', 'blistering rash all over with a fever'],
-    ['unwell child', 'my baby is limp and not breathing well'],
-  ];
-
-  for (const [name, message] of cases) {
-    test(`fires for ${name}`, () => {
-      assert.equal(urgencyOf(message), 'emergency', `expected emergency for: ${message}`);
-    });
-  }
-
-  test('fires on Arabic input too', () => {
-    const arabic = [
-      'لا استطيع التنفس بعد استخدام الكريم',
-      'تورم في الوجه واللسان',
-      'ألم في الصدر',
-      'ابني بلع الدواء كامل',
-      'نزيف شديد لا يتوقف',
-    ];
-    for (const message of arabic) {
-      assert.equal(urgencyOf(message), 'emergency', `expected emergency for: ${message}`);
-    }
-  });
-
-  test('every emergency rule has at least one Arabic pattern', () => {
-    for (const rule of EMERGENCY_RULES) {
-      const hasArabic = rule.patterns.some((p) => /[؀-ۿ]/.test(p.source));
-      assert.ok(hasArabic, `rule "${rule.id}" has no Arabic pattern`);
-    }
-  });
-});
-
-describe('pharmacist-review triggers (§5.2)', () => {
-  const cases: [string, string][] = [
-    ['pregnancy', 'is this serum safe while pregnant?'],
-    ['breastfeeding', 'can I use this while breastfeeding'],
-    ['infant', 'is this cream safe for my baby'],
-    ['medicine interaction', 'can I take this with my medication'],
-    ['chronic condition', 'I am diabetic, will this suit me'],
-    ['prescription', 'my dermatologist prescribed something already'],
-    ['infection', 'the area looks infected and has pus'],
-    ['diagnosis request', 'do I have a fungal infection'],
-    ['dose change', 'should I stop taking my treatment'],
-  ];
-
-  for (const [name, message] of cases) {
-    test(`fires for ${name}`, () => {
-      assert.equal(urgencyOf(message), 'pharmacist_review', `expected pharmacist_review for: ${message}`);
-    });
-  }
-
-  test('fires on Arabic input too', () => {
-    const arabic = ['هل هذا آمن للحامل؟', 'هل يتعارض مع ادويتي؟', 'عندي سكري هل يناسبني'];
-    for (const message of arabic) {
-      assert.equal(urgencyOf(message), 'pharmacist_review', `expected pharmacist_review for: ${message}`);
-    }
-  });
-
-  test('every pharmacist rule has at least one Arabic pattern', () => {
-    for (const rule of PHARMACIST_RULES) {
-      const hasArabic = rule.patterns.some((p) => /[؀-ۿ]/.test(p.source));
-      assert.ok(hasArabic, `rule "${rule.id}" has no Arabic pattern`);
-    }
-  });
-});
-
-describe('trigger precedence and false positives', () => {
-  test('an emergency outranks a pharmacist trigger in the same message', () => {
-    const matches = detectTriggers('I am pregnant and I cannot breathe');
-    assert.equal(highestUrgency(matches), 'emergency');
-    assert.ok(matches.every((m) => m.urgency === 'emergency'), 'emergency should short-circuit');
-  });
-
-  test('ordinary shopping questions do not trigger anything', () => {
-    const benign = [
-      'do you have a moisturiser for dry skin',
-      'what is the price of the CeraVe cleanser',
-      'هل يوجد واقي شمس للبشرة الدهنية',
-      'I want something gentle for my face',
-      'which shampoo is best for frizz',
-    ];
-    for (const message of benign) {
-      assert.equal(urgencyOf(message), null, `false positive on: ${message}`);
-    }
-  });
-});
 
 describe('sensitive data detection (§5.4)', () => {
   test('flags card numbers and passwords', () => {

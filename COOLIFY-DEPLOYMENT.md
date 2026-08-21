@@ -103,7 +103,7 @@ redeploy.**
 Coolify containers are replaced on each deployment. The chatbot keeps its
 database in a single SQLite file, and that file holds things that cannot be
 regenerated from WooCommerce: every verification decision your reviewers made,
-your FAQ answers, the escalation log, and your analytics history.
+your FAQ answers, and your analytics history.
 
 1. Open the application → **Storages** tab.
 2. **+ Add** → *Volume Mount*.

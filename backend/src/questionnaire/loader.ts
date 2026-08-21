@@ -19,12 +19,6 @@ export interface QuestionOption {
   label_ar: string;
 }
 
-export interface EscalationRule {
-  values: string[];
-  urgency: 'emergency' | 'pharmacist_review';
-  reason: string;
-}
-
 export interface Question {
   key: string;
   text_en: string;
@@ -37,7 +31,6 @@ export interface Question {
   /** Asks about type/ingredient knowledge — must offer an "I'm not sure" option. */
   knowledge_question?: boolean;
   privacy_sensitive?: boolean;
-  escalate?: EscalationRule;
 }
 
 export interface QuestionnaireConfig {
@@ -147,14 +140,6 @@ export function validateQuestionnaire(cfg: QuestionnaireConfig): string[] {
 
     if (q.show_if && !cfg.questions.some((other) => other.key === q.show_if!.key)) {
       problems.push(`${where} depends on "${q.show_if.key}", which is not in this questionnaire`);
-    }
-
-    if (q.escalate) {
-      const valid = new Set((q.options ?? []).map((o) => o.value));
-      for (const v of q.escalate.values) {
-        if (!valid.has(v)) problems.push(`${where} escalates on "${v}", which is not one of its options`);
-      }
-      if (!q.escalate.reason?.trim()) problems.push(`${where} has an escalation rule with no reason`);
     }
   }
 

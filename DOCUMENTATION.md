@@ -16,7 +16,7 @@ WordPress + WooCommerce  ──── wellness-chatbot plugin
       ▼
 Backend service (Node/TS/Fastify)
       │
-      ├── SQLite: products, embeddings, sessions, KB, escalations, events, audit
+      ├── SQLite: products, embeddings, sessions, KB, events, audit
       └── OpenAI: chat + tools, structured-output labeling, embeddings
 ```
 
@@ -25,8 +25,8 @@ session-bound token for the browser and signs the real request itself (§11).
 
 **Why this split** (§1.1): the OpenAI key stays off the WordPress host;
 embeddings-based bilingual retrieval is awkward in PHP/MySQL; the conversation
-state machine and escalation engine are testable outside WordPress's request
-lifecycle; and the parts that will change weekly ship without a plugin release.
+state machine is testable outside WordPress's request lifecycle; and the parts
+that will change weekly ship without a plugin release.
 
 ### Deviations from the spec, and why
 
@@ -36,6 +36,8 @@ lifecycle; and the parts that will change weekly ship without a plugin release.
 | Redis for sessions | A `sessions` table in the same SQLite file | Avoids a second service for a single-country store. Same TTL semantics. |
 | Node 20+ | Node 22.5+ | Required by `node:sqlite`. Documented in `package.json` `engines`. |
 | Backend pulls the catalogue via WooCommerce REST | Backend has no REST client at all; WordPress pushes | The original design (`products/woocommerce.ts`, since removed) pulled products on every webhook that lacked a full payload, meaning each save cost a second full WordPress + WooCommerce boot to service the pull — untenable on constrained/shared hosting. Traffic is now strictly one-directional: the plugin's queue (`WWC_Queue`) batches full product data on save, and the initial/bulk load is a file (`WWC_Exporter` → `/api/admin/catalogue/import`), not an API pull. `products/normalize.ts` is the one place a `WooRawProduct` becomes a stored row, regardless of which path delivered it. |
+| Rule-based emergency/pharmacist-review escalation to a human (§5.1, §5.2) | Removed entirely | Explicit store-owner decision. `safety/triggers.ts`, the `escalate_to_human` tool, `blockSelling()`, the Escalation Log, and the widget's handoff UI are gone. Sensitive-data detection (§5.4) is unrelated and still runs — see `safety/engine.ts`. |
+| Human approval gates a KB answer (§7) | Direct answers | Explicit store-owner decision. `upsertKb()` derives usability from language completeness, not a manual "Approved" checkbox — see `kb/repository.ts`. |
 
 ---
 
@@ -110,22 +112,23 @@ shipped up to the same state; see `backend/src/cli/auto-verify-pending.ts`.
 
 1. Load or create the session.
 2. Detect language; lock it (§6.1).
-3. **Safety screen before the model** (§5). An emergency returns approved copy
-   with no API call at all.
+3. Check for sensitive data (§5.4) — card numbers, passwords, IDs. Unrelated to
+   the removed escalation pathway below; this still runs on every turn.
 4. Assemble context: locked language, collected answers, business settings, the
    next questionnaire question, retrieved FAQ text.
 5. Call OpenAI with the tool set, looping up to four tool rounds.
-6. Any escalation — rule-triggered or model-triggered — lands in the same log.
-7. Return structured JSON: text, quick replies, cards, progress, handoff.
+6. Return structured JSON: text, quick replies, cards, progress.
+
+There is no rule-based safety screen and no escalation step here any more —
+removed by explicit store-owner decision; see §5 below.
 
 ### Tools (§4.3)
 
 `get_faq_answer`, `submit_questionnaire_answer`, `get_recommendations`,
-`escalate_to_human`, `search_products`.
+`search_products`.
 
-Each executor re-validates. `get_recommendations` refuses outright when selling
-is blocked; `search_products` filters to verified, in-stock products before the
-model ever sees a name.
+Each executor re-validates. `search_products` filters to verified, in-stock
+products before the model ever sees a name.
 
 ### Questionnaires (§4.4)
 
@@ -133,9 +136,8 @@ JSON in `backend/src/questionnaire/config/`, editable through the admin without 
 deploy. Edits land in `data/questionnaire/` and override the shipped defaults.
 
 `validateQuestionnaire()` enforces the spec's own question-writing rules so
-future edits stay compliant: bilingual text, 3–7 options per screen, an "I'm not
-sure" option on any question assuming product knowledge, and escalation rules
-that reference real option values.
+future edits stay compliant: bilingual text, 3–7 options per screen, and an
+"I'm not sure" option on any question assuming product knowledge.
 
 Branch questions use `show_if`, so a customer answers ~6 questions, not 20.
 
@@ -152,21 +154,20 @@ Branch questions use `show_if`, so a customer answers ~6 questions, not 20.
 
 ---
 
-## 5. Safety engine (§5)
+## 5. Sensitive-data detection (§5.4)
 
-`backend/src/safety/`
+`backend/src/safety/engine.ts`
 
-- `triggers.ts` — every trigger from §5.1 and §5.2, each with English **and**
-  Arabic patterns. A test asserts that no rule ships English-only.
-- `templates.ts` — approved copy, returned verbatim. This is the one place the
-  assistant speaks without the model.
-- `engine.ts` — screening, the escalation log, and the "selling blocked" flag.
+The rule-based emergency/pharmacist-review trigger engine that used to live
+here (§5.1, §5.2 — `triggers.ts`, plus the escalation log and "selling
+blocked" flag) was removed by explicit store-owner decision; see the
+deviations table in §1. `escalate_to_human` no longer exists as a tool, and
+nothing stops the assistant from continuing a conversation regardless of
+topic.
 
-An emergency blocks selling for the whole session. A pharmacist review pauses
-that topic but lets the conversation continue (§5.2).
-
-Card numbers, CVVs, passwords and 12-digit Civil IDs are detected and never
-echoed back (§5.4).
+What remains, unrelated to that removal: card numbers, CVVs, passwords and
+12-digit Civil IDs are detected (`containsSensitiveData()`) and never echoed
+back — the customer gets a warning, nothing more.
 
 ---
 
@@ -227,9 +228,10 @@ Vanilla TypeScript, ~14 kB minified, built by esbuild into the plugin's assets.
 
 Implemented from the §9.2 feature table: quick replies, progress indicator with
 back navigation, session-persisted answers, compare drawer, expandable
-"Why this?", replace-this-option, stock badges, human-handover carrying the
-transcript forward, thumbs feedback with an optional reason, and the privacy
-notice.
+"Why this?", replace-this-option, stock badges, thumbs feedback with an
+optional reason, and the privacy notice. The human-handover block that used to
+render here (`renderHandoff()` in `cards.ts`) was removed along with the rest
+of the escalation pathway — see §5.
 
 Accessibility: focus trap, Escape to close, ARIA live region for messages,
 `role="progressbar"`, visible focus rings, 40–48px tap targets,
@@ -248,18 +250,17 @@ endpoint; the backend never touches cart state.
 cd backend && npm test
 ```
 
-100+ tests, no network or API key required:
+80 tests, no network or API key required:
 
-- **Safety** — every §5.1 and §5.2 trigger in both languages, emergency
-  precedence, false-positive checks on ordinary shopping questions, sensitive
-  data detection, the pharmacist gate.
+- **Safety** — sensitive data detection (§5.4), the labeling pipeline's
+  pharmacist gate (§3.3 step 4, unrelated to the removed escalation pathway).
 - **Recommendation** — eligibility rules, the 100-point weights, diversity
   penalty, top-three selection, no-padding, Arabic card labels.
 - **Conversation** — questionnaire validation, never-ask-twice, branch
-  conditions, questionnaire escalation rules, language detection, Arabic
-  normalization and synonyms, HMAC signing and replay rejection, product push
-  validation (a payload naming a product without describing it is rejected,
-  not treated as a reason to fetch it).
+  conditions, language detection, Arabic normalization and synonyms, HMAC
+  signing and replay rejection, product push validation (a payload naming a
+  product without describing it is rejected, not treated as a reason to fetch
+  it).
 
 ---
 
@@ -269,8 +270,8 @@ cd backend && npm test
 Avoid serverless — session state and the in-process vector index want a warm
 instance.
 
-**Back up** `DATABASE_PATH`. It holds verification decisions, the FAQ, the
-escalation log and analytics. Products can be re-synced; those cannot.
+**Back up** `DATABASE_PATH`. It holds verification decisions, the FAQ, and
+analytics. Products can be re-synced; those cannot.
 
 **Costs**: chat turns use the balanced model, language detection the cheapest,
 labeling the flagship, and labeling runs once per product. Rate limits are
@@ -287,10 +288,8 @@ settings. The admin Analytics screen carries the §14 KPIs.
 - [ ] Top-selling products have complete, verified data
 - [ ] All four category questionnaires tested end to end
 - [ ] Top-three recommendations stock-aware and explainable
-- [ ] Human handover tested, including the WhatsApp path
 - [ ] **Arabic wording reviewed by a fluent speaker, not machine-translated**
 - [ ] Privacy notice visible in the widget
-- [ ] Emergency and pharmacist escalation paths tested
 - [ ] Analytics events visible on the dashboard
 - [ ] A named owner for label review, KB edits and KPI review
 - [ ] Returns policy explicitly confirmed with the store owner
@@ -306,8 +305,9 @@ settings. The admin Analytics screen carries the §14 KPIs.
 2. **Multilingual plugin** — is WPML or Polylang active? `WWC_Meta` detects both
    and exposes the `wwc_bilingual_meta` filter; without one, the flat `_ar` meta
    keys are used.
-3. **Human handoff channel** — the real WhatsApp Business number, and whether a
-   live-chat tool is in use.
+3. **Contact channel** — the real WhatsApp Business number, and whether a
+   live-chat tool is in use. Shared with a customer who asks how to reach the
+   store; no longer tied to an escalation mechanism (removed, see §5).
 4. **Backend hosting** — where the Node service runs, and access provisioning.
 5. **Pharmacist reviewer** — optional. Assigning `wwc_pharmacist_review` to
    someone with that background keeps `verified_by_pharmacist` (and the

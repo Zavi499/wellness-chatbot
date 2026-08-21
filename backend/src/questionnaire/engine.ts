@@ -13,7 +13,7 @@ import {
   type QuestionnaireConfig,
   type QuestionnaireId,
 } from './loader.js';
-import type { AnswerMap, EscalationUrgency, Language, QuickReply } from '../types.js';
+import type { AnswerMap, Language, QuickReply } from '../types.js';
 
 export function isApplicable(q: Question, answers: AnswerMap): boolean {
   if (!q.show_if) return true;
@@ -63,39 +63,6 @@ export function quickRepliesFor(q: Question, language: Language): QuickReply[] {
 
 export function promptFor(q: Question, language: Language): string {
   return questionText(q, language);
-}
-
-export interface AnswerEscalation {
-  urgency: EscalationUrgency;
-  reason: string;
-  question_key: string;
-  matched_value: string;
-}
-
-/**
- * Checks a newly recorded answer against the questionnaire's own escalation
- * rules (sensitive body areas, hair-loss red flags, pregnancy, medicines).
- * This runs regardless of what the model decided to do.
- */
-export function escalationForAnswer(
-  id: QuestionnaireId,
-  questionKey: string,
-  value: string | string[],
-): AnswerEscalation | null {
-  const cfg = loadQuestionnaire(id);
-  const question = cfg.questions.find((q) => q.key === questionKey);
-  if (!question?.escalate) return null;
-
-  const values = Array.isArray(value) ? value : [value];
-  const matched = values.find((v) => question.escalate!.values.includes(v));
-  if (!matched) return null;
-
-  return {
-    urgency: question.escalate.urgency,
-    reason: question.escalate.reason,
-    question_key: questionKey,
-    matched_value: matched,
-  };
 }
 
 /** Maps the entry screen's `help_topic` answer onto a category questionnaire. */

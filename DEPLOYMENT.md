@@ -377,9 +377,8 @@ sudo chmod +x /etc/cron.daily/wellness-chatbot-backup
 
 **This matters.** Raw product data can be re-exported from WordPress and
 re-imported any time (Part 3.3). What cannot be regenerated is in this file:
-every verification decision your reviewers made, the FAQ answers, the
-escalation log, and the analytics history. Losing it means re-reviewing the
-whole catalogue by hand.
+every verification decision your reviewers made, the FAQ answers, and the
+analytics history. Losing it means re-reviewing the whole catalogue by hand.
 
 ## 4.5 Updating later
 
@@ -493,8 +492,6 @@ Once live, **Wellness Chatbot → Analytics** shows where the assistant is faili
 - **No-answer rate rising** → a topic is missing from the knowledge base
 - **Thumbs-down reasons** → read them; they name the actual problem
 - **Low questionnaire completion** → a question is confusing or too early
-- **High handover rate** → either the safety rules are working as intended, or a
-  whole category lacks verified data
 
 Weekly during launch, monthly once stable. Fix findings in the product data and
 knowledge base — not by rewriting prompts. A prompt tweak that papers over
@@ -657,10 +654,9 @@ What still needs a human, on a schedule:
 
 | How often | Task |
 | --- | --- |
-| Daily during launch | Check the Escalation Log — emergencies also raise a notice anywhere in wp-admin |
 | Weekly during launch | Review thumbs-down feedback and the no-answer rate |
 | Weekly | Check the Label Review Queue — should normally be empty; anything there needs a category/tag fix |
-| Monthly | Analytics review; re-test the safety flows after any big catalogue or policy change |
+| Monthly | Analytics review |
 | After any policy change | Update Business Settings and the FAQ — never leave the assistant quoting an old policy |
 
 ---

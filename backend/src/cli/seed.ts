@@ -73,10 +73,10 @@ function seedFaqSkeleton(): number {
       topic: faq.topic,
       question_en: faq.question_en,
       question_ar: faq.question_ar,
+      // Empty until an admin fills in both languages — it goes live the
+      // moment they do, no separate approval step.
       answer_en: null,
       answer_ar: null,
-      // Unapproved and empty: a human writes and approves the answer.
-      approved: false,
       actor: 'seed',
     });
     created += 1;

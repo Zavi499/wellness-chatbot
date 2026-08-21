@@ -4,18 +4,25 @@
  * Audit answers "who changed this safety-relevant thing and when".
  * Events answer "how is the assistant performing".
  */
+import type { DatabaseSync } from 'node:sqlite';
 import { db, toJson, nowIso } from '../db/index.js';
 
 export interface AuditInput {
-  entity: 'product' | 'kb' | 'settings' | 'label_draft' | 'escalation';
+  entity: 'product' | 'kb' | 'settings' | 'label_draft';
   entityId: string;
   action: string;
   actor?: string | null;
   detail?: unknown;
 }
 
-export function logAudit(input: AuditInput): void {
-  db()
+/**
+ * Accepts an injectable `conn`, like the repository functions that call it,
+ * so a test using `openMemoryDb()` never touches the real db() singleton —
+ * without this, concurrent test files calling logAudit() through the real
+ * file-backed database can collide with "database is locked" errors.
+ */
+export function logAudit(input: AuditInput, conn: DatabaseSync = db()): void {
+  conn
     .prepare(
       `INSERT INTO audit_log (entity, entity_id, action, actor, detail_json, created_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -57,7 +64,6 @@ export type EventName =
   | 'routine_built'
   | 'faq_answered'
   | 'faq_no_answer'
-  | 'escalated'
   | 'feedback_up'
   | 'feedback_down'
   | 'turn_completed'
@@ -95,7 +101,6 @@ export function kpiSummary(days = 30) {
   const sessions = distinctSessions('session_started', since);
   const questionnaireStarted = distinctSessions('questionnaire_started', since);
   const reachedRecommendation = distinctSessions('recommendation_shown', since);
-  const escalations = distinctSessions('escalated', since);
   const faqAnswered = countEvent('faq_answered', since);
   const faqNoAnswer = countEvent('faq_no_answer', since);
   const up = countEvent('feedback_up', since);
@@ -136,7 +141,6 @@ export function kpiSummary(days = 30) {
       countEvent('recommendation_add_to_cart', since),
       countEvent('recommendation_shown', since),
     ),
-    human_handover_rate: ratio(escalations, sessions),
     no_answer_rate: ratio(faqNoAnswer, faqAnswered + faqNoAnswer),
     helpfulness_score: ratio(up, up + down),
     incorrect_answer_reports: down,

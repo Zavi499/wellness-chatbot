@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Wellness Chatbot
  * Plugin URI:        https://www.wellnesspharmacykw.com/
- * Description:       AI shopping assistant for Wellness World — product finder, verified FAQ answers, and pharmacist-gated safety escalation. Thin integration layer; the AI orchestration runs in the companion backend service.
+ * Description:       AI shopping assistant for Wellness World — product finder and direct-answered FAQ. Thin integration layer; the AI orchestration runs in the companion backend service.
  * Version:           0.1.0
  * Requires at least: 6.0
  * Requires PHP:      8.0

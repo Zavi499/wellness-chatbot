@@ -30,27 +30,14 @@ export interface RecommendationSet {
   shortfall_note?: string;
 }
 
-export interface HandoffOptions {
-  whatsapp_url: string | null;
-  phone: string | null;
-  live_chat_note: string | null;
-  hours: string | null;
-}
-
 export interface ChatResponse {
   session_id: string;
   message: string;
   language: Language;
   quick_replies: QuickReply[];
   recommendations?: RecommendationSet;
-  escalation?: {
-    urgency: 'emergency' | 'pharmacist_review';
-    reason: string;
-    handoff: HandoffOptions;
-  };
   progress?: { step: number; total: number };
   message_id: string;
-  selling_blocked: boolean;
 }
 
 export interface SessionResponse {
@@ -85,8 +72,6 @@ export interface Strings {
   yes: string;
   no: string;
   feedbackReason: string;
-  talkToHuman: string;
-  callUs: string;
   back: string;
   stepOf: string;
   error: string;

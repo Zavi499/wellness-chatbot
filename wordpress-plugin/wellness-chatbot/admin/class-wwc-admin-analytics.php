@@ -35,7 +35,6 @@ class WWC_Admin_Analytics {
 			array( __( 'Questionnaire completion', 'wellness-chatbot' ), self::value( $result, 'questionnaire_completion_rate' ), '%' ),
 			array( __( 'Recommendation click-through', 'wellness-chatbot' ), self::value( $result, 'recommendation_click_through_rate' ), '%' ),
 			array( __( 'Add to cart after recommendation', 'wellness-chatbot' ), self::value( $result, 'add_to_cart_rate' ), '%' ),
-			array( __( 'Human handover rate', 'wellness-chatbot' ), self::value( $result, 'human_handover_rate' ), '%' ),
 			array( __( 'No-answer rate', 'wellness-chatbot' ), self::value( $result, 'no_answer_rate' ), '%' ),
 			array( __( 'Helpfulness score', 'wellness-chatbot' ), self::value( $result, 'helpfulness_score' ), '%' ),
 			array( __( 'Incorrect-answer reports', 'wellness-chatbot' ), self::value( $result, 'incorrect_answer_reports' ), '' ),

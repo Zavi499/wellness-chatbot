@@ -7,7 +7,7 @@
  */
 import { Api } from './api.js';
 import { el, clear, formatMessage, scrollToBottom, trapFocus } from './dom.js';
-import { renderCompareDrawer, renderFeedback, renderHandoff, renderRecommendations } from './cards.js';
+import { renderCompareDrawer, renderFeedback, renderRecommendations } from './cards.js';
 import type { ChatResponse, Language, RecommendationSet, Strings, WidgetConfig } from './types.js';
 
 class ChatWidget {
@@ -232,19 +232,8 @@ class ChatWidget {
       );
     }
 
-    if (response.escalation) {
-      this.messages.append(renderHandoff(response.escalation.handoff, this.strings));
-    }
-
-    // Selling is off for the rest of the conversation: hide the product-finder
-    // affordances rather than leaving dead controls on screen.
-    if (response.selling_blocked) {
-      this.progress.hidden = true;
-      clear(this.quickReplies);
-    } else {
-      this.renderQuickReplies(response);
-      this.renderProgress(response);
-    }
+    this.renderQuickReplies(response);
+    this.renderProgress(response);
 
     scrollToBottom(this.messages);
   }

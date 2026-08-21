@@ -2,7 +2,7 @@
 -- Wellness World chatbot — SQLite schema
 --
 -- One file holds products (mirrored from WooCommerce), their embeddings, the
--- FAQ knowledge base, conversation sessions, escalations and analytics.
+-- FAQ knowledge base, conversation sessions and analytics.
 -- WooCommerce stays the system of record; everything here is a derived mirror
 -- plus chatbot-owned state.
 -- ---------------------------------------------------------------------------
@@ -153,24 +153,6 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(last_active_at);
-
--- --- Escalation log (spec §8.3) --------------------------------------------
-CREATE TABLE IF NOT EXISTS escalations (
-  id              INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_id      TEXT NOT NULL,
-  urgency         TEXT NOT NULL,   -- emergency | pharmacist_review
-  reason          TEXT NOT NULL,
-  trigger_source  TEXT NOT NULL,   -- rule | model
-  matched_rule    TEXT,
-  transcript_json TEXT NOT NULL,
-  language        TEXT,
-  status          TEXT NOT NULL DEFAULT 'open',  -- open | in_progress | resolved
-  resolution_note TEXT,
-  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-  resolved_at     TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_escalations_status ON escalations(status, created_at);
 
 -- --- Analytics (spec §14) ---------------------------------------------------
 CREATE TABLE IF NOT EXISTS events (

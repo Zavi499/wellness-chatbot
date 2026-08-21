@@ -31,12 +31,7 @@
         { "value": "teen", "label_en": "A teenager", "label_ar": "مراهق" },
         { "value": "child", "label_en": "A child", "label_ar": "طفل" },
         { "value": "older_adult", "label_en": "An older adult", "label_ar": "شخص كبير في السن" }
-      ],
-      "escalate": {
-        "values": ["child"],
-        "urgency": "pharmacist_review",
-        "reason": "Supplements for children require pharmacist-reviewed data before any personalised recommendation."
-      }
+      ]
     },
     {
       "key": "pregnancy_status",
@@ -49,12 +44,7 @@
         { "value": "breastfeeding", "label_en": "Breastfeeding", "label_ar": "مرضع" },
         { "value": "no", "label_en": "Neither", "label_ar": "لا هذا ولا ذاك" },
         { "value": "prefer_not_say", "label_en": "Prefer not to say", "label_ar": "أفضل عدم الإفصاح" }
-      ],
-      "escalate": {
-        "values": ["pregnant", "breastfeeding"],
-        "urgency": "pharmacist_review",
-        "reason": "Supplement suitability during pregnancy or breastfeeding requires pharmacist guidance."
-      }
+      ]
     },
     {
       "key": "diagnosed_condition",
@@ -66,12 +56,7 @@
         { "value": "yes", "label_en": "Yes", "label_ar": "نعم" },
         { "value": "no", "label_en": "No", "label_ar": "لا" },
         { "value": "prefer_not_say", "label_en": "Prefer not to say", "label_ar": "أفضل عدم الإفصاح" }
-      ],
-      "escalate": {
-        "values": ["yes"],
-        "urgency": "pharmacist_review",
-        "reason": "A diagnosed condition requires pharmacist-reviewed supplement guidance."
-      }
+      ]
     },
     {
       "key": "current_medicines",
@@ -85,12 +70,7 @@
         { "value": "both", "label_en": "Both", "label_ar": "كلاهما" },
         { "value": "none", "label_en": "Neither", "label_ar": "لا شيء" },
         { "value": "prefer_not_say", "label_en": "Prefer not to say", "label_ar": "أفضل عدم الإفصاح" }
-      ],
-      "escalate": {
-        "values": ["medicines", "supplements", "both"],
-        "urgency": "pharmacist_review",
-        "reason": "Possible interaction between supplements and existing medicines or supplements — pharmacist review required."
-      }
+      ]
     },
     {
       "key": "preferred_form",

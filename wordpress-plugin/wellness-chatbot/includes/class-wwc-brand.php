@@ -60,6 +60,24 @@ class WWC_Brand {
 		$out .= '--wwc-primary-hover:' . self::color( 700 ) . ';';
 		$out .= '--wwc-primary-text:' . self::color( 800 ) . ';';
 		$out .= '--wwc-surface:' . self::color( 50 ) . ';';
+		// "r, g, b" triplet, for CSS that needs an alpha channel (rgba()) a
+		// plain hex custom property can't provide — e.g. the launcher's pulse.
+		$out .= '--wwc-primary-rgb:' . self::hex_to_rgb( self::color( 600 ) ) . ';';
 		return $out;
+	}
+
+	/**
+	 * @param string $hex e.g. '#9322AA'.
+	 * @return string e.g. '147, 34, 170'.
+	 */
+	private static function hex_to_rgb( $hex ) {
+		$hex = ltrim( $hex, '#' );
+		if ( 3 === strlen( $hex ) ) {
+			$hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+		}
+		$r = hexdec( substr( $hex, 0, 2 ) );
+		$g = hexdec( substr( $hex, 2, 2 ) );
+		$b = hexdec( substr( $hex, 4, 2 ) );
+		return "{$r}, {$g}, {$b}";
 	}
 }

@@ -9,12 +9,7 @@ import {
   loadAllQuestionnaires,
   validateQuestionnaire,
 } from '../src/questionnaire/loader.js';
-import {
-  escalationForAnswer,
-  isApplicable,
-  nextQuestion,
-  pendingQuestions,
-} from '../src/questionnaire/engine.js';
+import { isApplicable, nextQuestion, pendingQuestions } from '../src/questionnaire/engine.js';
 import { detectByScript } from '../src/language/detect.js';
 import { expandQuery, normalizeArabic, normalizeQuery, keywordScore } from '../src/search/normalize.js';
 import { sign, verifySignature, issueSessionToken, verifySessionToken } from '../src/security/hmac.js';
@@ -127,39 +122,6 @@ describe('branch questions (§4.4)', () => {
 
     assert.equal(isApplicable(duration, { concern_primary: 'dandruff' }), false);
     assert.equal(isApplicable(duration, { concern_primary: 'hair_loss' }), true);
-  });
-});
-
-describe('questionnaire escalation rules (§4.4, §5.2)', () => {
-  test('intimate-area body care escalates', () => {
-    const result = escalationForAnswer('body', 'area_of_use', 'intimate');
-    assert.equal(result?.urgency, 'pharmacist_review');
-  });
-
-  test('broken or infected skin escalates', () => {
-    assert.ok(escalationForAnswer('body', 'skin_condition', 'broken_skin'));
-    assert.ok(escalationForAnswer('body', 'skin_condition', 'infection_signs'));
-    assert.equal(escalationForAnswer('body', 'skin_condition', 'intact'), null);
-  });
-
-  test('sudden or patchy hair loss escalates', () => {
-    assert.ok(escalationForAnswer('hair', 'hair_loss_duration', 'sudden'));
-    assert.ok(escalationForAnswer('hair', 'hair_loss_symptoms', ['bald_patches']));
-    assert.equal(escalationForAnswer('hair', 'hair_loss_duration', 'gradual'), null);
-  });
-
-  test('pregnancy, children and medicines escalate in the vitamins flow', () => {
-    assert.ok(escalationForAnswer('vitamins', 'pregnancy_status', 'pregnant'));
-    assert.ok(escalationForAnswer('vitamins', 'pregnancy_status', 'breastfeeding'));
-    assert.ok(escalationForAnswer('vitamins', 'who_for_detail', 'child'));
-    assert.ok(escalationForAnswer('vitamins', 'current_medicines', 'medicines'));
-    assert.ok(escalationForAnswer('vitamins', 'diagnosed_condition', 'yes'));
-    assert.equal(escalationForAnswer('vitamins', 'pregnancy_status', 'no'), null);
-  });
-
-  test('an existing prescribed treatment escalates in the face flow', () => {
-    assert.ok(escalationForAnswer('face', 'current_actives', ['prescription']));
-    assert.equal(escalationForAnswer('face', 'current_actives', ['vitamin_c']), null);
   });
 });
 

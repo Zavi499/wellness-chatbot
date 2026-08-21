@@ -20,7 +20,6 @@ function emptyState(sessionId: string): SessionState {
     created_at: now,
     last_active_at: now,
     answers: {},
-    escalation: { triggered: false, reason: null, urgency: null, selling_blocked: false },
     last_recommendations: [],
     history: [],
   };
@@ -45,7 +44,7 @@ export function getSession(sessionId: string): SessionState | null {
 
   const lastActive = new Date(String(row.last_active_at)).getTime();
   if (Date.now() - lastActive > config.session.ttlMinutes * 60_000) {
-    // Expired. Drop it so a stale escalation flag cannot leak into a new chat.
+    // Expired. Drop it so stale answers cannot leak into a new chat.
     db().prepare('DELETE FROM sessions WHERE session_id = ?').run(sessionId);
     return null;
   }
@@ -96,18 +95,6 @@ export function lockLanguage(state: SessionState, language: Language): SessionSt
   state.language = language;
   state.language_locked = true;
   if (changed) logEvent('language_locked', state.session_id, { language });
-  return state;
-}
-
-export function blockSelling(state: SessionState, reason: string, urgency: 'emergency' | 'pharmacist_review'): SessionState {
-  state.escalation = {
-    triggered: true,
-    reason,
-    urgency,
-    // Only an emergency stops selling for the whole conversation (§5.1); a
-    // pharmacist review pauses that topic but the chat can continue (§5.2).
-    selling_blocked: urgency === 'emergency' ? true : state.escalation.selling_blocked,
-  };
   return state;
 }
 

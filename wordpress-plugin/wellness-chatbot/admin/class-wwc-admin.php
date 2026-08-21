@@ -17,7 +17,6 @@ class WWC_Admin {
 
 		WWC_Admin_Labels::init();
 		WWC_Admin_Kb::init();
-		WWC_Admin_Escalations::init();
 		WWC_Admin_Analytics::init();
 		WWC_Admin_Settings::init();
 		WWC_Admin_History::init();
@@ -39,7 +38,6 @@ class WWC_Admin {
 		$pages = array(
 			array( self::MENU_SLUG, __( 'Label Review Queue', 'wellness-chatbot' ), array( 'WWC_Admin_Labels', 'render' ) ),
 			array( self::MENU_SLUG . '-kb', __( 'Knowledge Base', 'wellness-chatbot' ), array( 'WWC_Admin_Kb', 'render' ) ),
-			array( self::MENU_SLUG . '-escalations', __( 'Escalation Log', 'wellness-chatbot' ), array( 'WWC_Admin_Escalations', 'render' ) ),
 			array( self::MENU_SLUG . '-analytics', __( 'Analytics', 'wellness-chatbot' ), array( 'WWC_Admin_Analytics', 'render' ) ),
 			array( self::MENU_SLUG . '-settings', __( 'Settings', 'wellness-chatbot' ), array( 'WWC_Admin_Settings', 'render' ) ),
 			array( self::MENU_SLUG . '-history', __( 'Version History', 'wellness-chatbot' ), array( 'WWC_Admin_History', 'render' ) ),
@@ -152,7 +150,6 @@ class WWC_Admin {
 			'approved'            => array( 'success', __( 'Product approved and marked verified.', 'wellness-chatbot' ) ),
 			'rejected'            => array( 'success', __( 'Draft rejected. The product stays unverified.', 'wellness-chatbot' ) ),
 			'relabeled'           => array( 'success', __( 'AI labeling re-run. The new draft is at the top of the queue.', 'wellness-chatbot' ) ),
-			'resolved'            => array( 'success', __( 'Escalation marked resolved.', 'wellness-chatbot' ) ),
 			'reset'               => array( 'success', __( 'Unreviewed AI drafts cleared. Verified and partial products were left untouched.', 'wellness-chatbot' ) ),
 			'failed'              => array( 'error', __( 'That did not work. Check the backend connection and try again.', 'wellness-chatbot' ) ),
 		);

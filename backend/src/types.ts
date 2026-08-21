@@ -93,16 +93,6 @@ export interface Product {
 /** The customer's collected questionnaire answers (spec §4.1). */
 export type AnswerMap = Record<string, string | string[]>;
 
-export interface EscalationState {
-  triggered: boolean;
-  reason: string | null;
-  urgency: EscalationUrgency | null;
-  /** Once an emergency fires, selling stops for the rest of the session (§5.1). */
-  selling_blocked: boolean;
-}
-
-export type EscalationUrgency = 'emergency' | 'pharmacist_review';
-
 export interface SessionState {
   session_id: string;
   language: Language | null;
@@ -110,7 +100,6 @@ export interface SessionState {
   created_at: string;
   last_active_at: string;
   answers: AnswerMap;
-  escalation: EscalationState;
   last_recommendations: number[];
   /** Turn-by-turn history handed back to the model each call. */
   history: ChatTurn[];
@@ -170,22 +159,8 @@ export interface ChatResponse {
   quick_replies: QuickReply[];
   recommendations?: RecommendationSet;
   routine?: RoutinePlan;
-  escalation?: {
-    urgency: EscalationUrgency;
-    reason: string;
-    handoff: HandoffOptions;
-  };
   progress?: { step: number; total: number };
   message_id: string;
-  /** True when selling has been switched off for the rest of the session. */
-  selling_blocked: boolean;
-}
-
-export interface HandoffOptions {
-  whatsapp_url: string | null;
-  phone: string | null;
-  live_chat_note: string | null;
-  hours: string | null;
 }
 
 /** Business facts owned by the WP Business Settings screen (spec §8.5). */

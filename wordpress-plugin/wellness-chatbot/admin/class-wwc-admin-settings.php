@@ -184,7 +184,7 @@ class WWC_Admin_Settings {
 		$items = array(
 			array( empty( $missing ), __( 'All business facts confirmed and entered', 'wellness-chatbot' ) ),
 			array( WWC_Settings::is_connected(), __( 'Backend connected', 'wellness-chatbot' ) ),
-			array( '' !== WWC_Settings::business_value( 'whatsapp_number' ) || '' !== WWC_Settings::business_value( 'phone_number' ), __( 'Human handover channel configured', 'wellness-chatbot' ) ),
+			array( '' !== WWC_Settings::business_value( 'whatsapp_number' ) || '' !== WWC_Settings::business_value( 'phone_number' ), __( 'A contact channel (WhatsApp or phone) configured', 'wellness-chatbot' ) ),
 			array( '' !== WWC_Settings::business_value( 'returns_policy' ), __( 'Returns / exchange / refund policy explicitly confirmed', 'wellness-chatbot' ) ),
 		);
 
@@ -198,7 +198,7 @@ class WWC_Admin_Settings {
 			);
 		}
 		echo '</ul>';
-		echo '<p class="description">' . esc_html__( 'Also confirm before go-live: Arabic wording reviewed by a fluent speaker, emergency and pharmacist escalation paths tested end to end, and a named owner responsible for label review and KB updates.', 'wellness-chatbot' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'Also confirm before go-live: Arabic wording reviewed by a fluent speaker, and a named owner responsible for label review and KB updates.', 'wellness-chatbot' ) . '</p>';
 	}
 
 	private static function render_maintenance() {

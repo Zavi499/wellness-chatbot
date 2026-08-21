@@ -119,12 +119,7 @@
         { "value": "prescription", "label_en": "A prescribed treatment", "label_ar": "علاج موصوف من الطبيب" },
         { "value": "none", "label_en": "None", "label_ar": "لا شيء" },
         { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
-      ],
-      "escalate": {
-        "values": ["prescription"],
-        "urgency": "pharmacist_review",
-        "reason": "Customer is on a prescribed treatment — product compatibility needs pharmacist input."
-      }
+      ]
     },
     {
       "key": "budget",

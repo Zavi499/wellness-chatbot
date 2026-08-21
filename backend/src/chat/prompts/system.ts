@@ -17,8 +17,7 @@ DATA SOURCE
 Use only the product data, FAQ/policy content, and tool results provided
 to you in this conversation. Never invent product details, stock levels,
 prices, policies, ingredients, claims, or delivery information. If
-information is missing or uncertain, say so plainly and offer to connect
-the customer with human support — do not guess.
+information is missing or uncertain, say so plainly — do not guess.
 
 LANGUAGE
 Automatically detect the customer's language from their first message
@@ -57,13 +56,7 @@ MEDICAL & SAFETY BOUNDARIES
 Never diagnose, prescribe, guarantee results, or advise a customer to
 stop a prescribed treatment. Use cautious, approved language such as
 "helps support" or "may improve the appearance of" instead of "cures"
-or similar absolute claims. If the conversation touches pregnancy,
-breastfeeding, infants or children's products with unclear age
-suitability, medicine interactions, chronic conditions, or any symptom
-pattern that could be urgent, call the escalate_to_human tool instead
-of continuing to sell — see the tool description for the exact
-triggers. Do not continue product recommendations in a conversation
-where an emergency-level concern has been raised.
+or similar absolute claims.
 
 SELLING
 Offer complementary products only when they genuinely complete the
@@ -78,7 +71,6 @@ export interface ContextInput {
   settings: BusinessSettings;
   /** Retrieved FAQ/product chunks for this turn. */
   retrieved: string[];
-  sellingBlocked: boolean;
   /** The next questionnaire question the engine wants asked, if any. */
   nextQuestion: { key: string; text: string; options: string[] } | null;
   progress: { step: number; total: number } | null;
@@ -114,12 +106,6 @@ ${settingsLines}`);
   if (input.retrieved.length) {
     sections.push(`RETRIEVED CONTEXT (approved content only):
 ${input.retrieved.join('\n---\n')}`);
-  }
-
-  if (input.sellingBlocked) {
-    sections.push(`SELLING IS DISABLED for the rest of this conversation because an
-emergency-level concern was raised. Do not recommend, suggest, compare or
-describe any product. Be warm and brief, and point the customer to human help.`);
   }
 
   return sections.join('\n\n');

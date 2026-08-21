@@ -2,8 +2,10 @@
 /**
  * Knowledge Base / FAQ editor (spec §8.2, §7).
  *
- * Bilingual entries with an approval state. Unapproved entries are never served
- * to a customer — the assistant uses the approved fallback wording instead.
+ * Direct answers, by explicit store-owner decision: an entry goes live the
+ * moment both languages have an answer, no separate approval step. An
+ * incomplete entry is never served to a customer — the assistant uses the
+ * fallback wording instead.
  *
  * @package WellnessChatbot
  */
@@ -47,8 +49,8 @@ class WWC_Admin_Kb {
 					sprintf(
 						/* translators: %d: number of topics. */
 						_n(
-							'%d FAQ topic still has no answer. Until it is written and approved, the assistant will say it does not have verified information.',
-							'%d FAQ topics still have no answer. Until they are written and approved, the assistant will say it does not have verified information.',
+							'%d FAQ topic still has no answer. Until both languages are filled in, the assistant will say it does not have verified information.',
+							'%d FAQ topics still have no answer. Until both languages are filled in, the assistant will say it does not have verified information.',
 							count( $unanswered ),
 							'wellness-chatbot'
 						),
@@ -58,7 +60,7 @@ class WWC_Admin_Kb {
 			);
 		}
 
-		echo '<p class="description">' . esc_html__( 'Every answer needs English and Arabic text, and must be approved before a customer can see it. Arabic should be reviewed by a fluent speaker, not machine-translated.', 'wellness-chatbot' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'An answer goes live as soon as both English and Arabic text are saved — no separate approval step. Arabic should be reviewed by a fluent speaker, not machine-translated.', 'wellness-chatbot' ) . '</p>';
 
 		self::render_form( null );
 
@@ -89,7 +91,7 @@ class WWC_Admin_Kb {
 			printf(
 				' <span class="wwc-flag %s">%s</span>',
 				$approved ? 'wwc-flag-ok' : 'wwc-flag-warn',
-				esc_html( $approved ? __( 'approved', 'wellness-chatbot' ) : __( 'not approved', 'wellness-chatbot' ) )
+				esc_html( $approved ? __( 'live', 'wellness-chatbot' ) : __( 'needs both languages', 'wellness-chatbot' ) )
 			);
 		}
 		echo '</h3>';
@@ -126,15 +128,8 @@ class WWC_Admin_Kb {
 		);
 		echo '</div>';
 
-		printf(
-			'<p><label><input type="checkbox" name="approved" value="1"%s%s /> %s</label></p>',
-			checked( $approved, true, false ),
-			$is_new ? '' : ( $has_both ? '' : ' disabled="disabled"' ),
-			esc_html__( 'Approved — the assistant may use this answer', 'wellness-chatbot' )
-		);
-
 		if ( ! $is_new && ! $has_both ) {
-			echo '<p class="description">' . esc_html__( 'Both languages need an answer before this entry can be approved.', 'wellness-chatbot' ) . '</p>';
+			echo '<p class="description">' . esc_html__( 'This entry goes live as soon as both languages have an answer — no separate approval needed.', 'wellness-chatbot' ) . '</p>';
 		}
 
 		if ( ! $is_new ) {
@@ -176,19 +171,14 @@ class WWC_Admin_Kb {
 			'question_ar' => isset( $_POST['question_ar'] ) ? sanitize_text_field( wp_unslash( $_POST['question_ar'] ) ) : '',
 			'answer_en'   => isset( $_POST['answer_en'] ) ? sanitize_textarea_field( wp_unslash( $_POST['answer_en'] ) ) : '',
 			'answer_ar'   => isset( $_POST['answer_ar'] ) ? sanitize_textarea_field( wp_unslash( $_POST['answer_ar'] ) ) : '',
-			'approved'    => ! empty( $_POST['approved'] ),
 		);
 
 		if ( 0 === $payload['id'] ) {
 			unset( $payload['id'] );
 		}
 
-		// An entry missing either language must not be approvable, whatever the
-		// form posted.
-		if ( '' === $payload['answer_en'] || '' === $payload['answer_ar'] ) {
-			$payload['approved'] = false;
-		}
-
+		// Whether this goes live is derived backend-side from whether both
+		// languages are filled in — there is nothing to force here.
 		$response = WWC_Backend_Client::post( '/api/admin/kb', $payload );
 
 		// The config cache holds questionnaire data; KB answers are read live.

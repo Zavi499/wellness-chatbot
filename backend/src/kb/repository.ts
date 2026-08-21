@@ -1,16 +1,30 @@
 /**
  * FAQ / policy knowledge base (spec §7).
  *
- * Same discipline as product data: nothing unapproved is ever served to a
- * customer, and when nothing matches the bot uses the exact fallback template
- * rather than guessing.
+ * Direct answers, by explicit store-owner decision: whatever an admin writes
+ * for both languages goes live immediately, no separate approval click —
+ * mirroring the labeling pipeline's direct-verify behavior. The one gate that
+ * remains is completeness, not review: an entry missing either language's
+ * answer is never served, and the bot uses the exact fallback template
+ * (`KB_FALLBACK`) rather than guessing or answering in only one language.
  */
+import type { DatabaseSync } from 'node:sqlite';
 import { db, nowIso } from '../db/index.js';
 import { logAudit } from '../analytics/audit.js';
 import { expandQuery, keywordScore } from '../search/normalize.js';
 import { embedOne } from '../search/embeddings.js';
 import { searchVectors } from '../search/vector.js';
 import type { KbEntry, Language } from '../types.js';
+
+/**
+ * "Approved" is computed live from completeness, not trusted from the stored
+ * column — so a row saved before direct-answer behavior shipped (complete,
+ * but still carrying an old `approved = 0`) is correctly treated as usable
+ * without needing a data migration.
+ */
+function isComplete(r: { answer_en?: unknown; answer_ar?: unknown }): boolean {
+  return Boolean(r.answer_en) && Boolean(r.answer_ar);
+}
 
 function rowToEntry(r: Record<string, unknown>): KbEntry {
   return {
@@ -20,21 +34,24 @@ function rowToEntry(r: Record<string, unknown>): KbEntry {
     question_ar: (r.question_ar as string) ?? null,
     answer_en: (r.answer_en as string) ?? null,
     answer_ar: (r.answer_ar as string) ?? null,
-    approved: Number(r.approved ?? 0) === 1,
+    approved: isComplete(r),
     updated_at: String(r.updated_at ?? ''),
     updated_by: (r.updated_by as string) ?? null,
   };
 }
 
-export function listKb(includeUnapproved = true): KbEntry[] {
+export function listKb(includeUnapproved = true, conn: DatabaseSync = db()): KbEntry[] {
   const sql = includeUnapproved
     ? 'SELECT * FROM kb_entries ORDER BY topic'
-    : 'SELECT * FROM kb_entries WHERE approved = 1 ORDER BY topic';
-  return (db().prepare(sql).all() as Record<string, unknown>[]).map(rowToEntry);
+    : `SELECT * FROM kb_entries
+        WHERE answer_en IS NOT NULL AND answer_en <> ''
+          AND answer_ar IS NOT NULL AND answer_ar <> ''
+       ORDER BY topic`;
+  return (conn.prepare(sql).all() as Record<string, unknown>[]).map(rowToEntry);
 }
 
-export function getKbEntry(id: number): KbEntry | null {
-  const row = db().prepare('SELECT * FROM kb_entries WHERE id = ?').get(id) as
+export function getKbEntry(id: number, conn: DatabaseSync = db()): KbEntry | null {
+  const row = conn.prepare('SELECT * FROM kb_entries WHERE id = ?').get(id) as
     | Record<string, unknown>
     | undefined;
   return row ? rowToEntry(row) : null;
@@ -47,13 +64,16 @@ export interface KbUpsert {
   question_ar?: string | null;
   answer_en?: string | null;
   answer_ar?: string | null;
-  approved?: boolean;
   actor?: string;
 }
 
-export function upsertKb(input: KbUpsert): KbEntry {
-  const conn = db();
-  const approved = input.approved ? 1 : 0;
+/**
+ * No `approved` input — whether an entry is usable is derived from whether
+ * both languages have an answer, not from a separate manual approval step.
+ * An edit to an already-live entry takes effect immediately, the same way.
+ */
+export function upsertKb(input: KbUpsert, conn: DatabaseSync = db()): KbEntry {
+  const approved = isComplete(input) ? 1 : 0;
 
   if (input.id) {
     conn
@@ -74,8 +94,11 @@ export function upsertKb(input: KbUpsert): KbEntry {
         input.actor ?? null,
         input.id,
       );
-    logAudit({ entity: 'kb', entityId: String(input.id), action: approved ? 'approved' : 'updated', actor: input.actor });
-    return getKbEntry(input.id)!;
+    logAudit(
+      { entity: 'kb', entityId: String(input.id), action: approved ? 'saved_live' : 'saved_incomplete', actor: input.actor },
+      conn,
+    );
+    return getKbEntry(input.id, conn)!;
   }
 
   const result = conn
@@ -94,14 +117,14 @@ export function upsertKb(input: KbUpsert): KbEntry {
       input.actor ?? null,
     );
   const id = Number(result.lastInsertRowid);
-  logAudit({ entity: 'kb', entityId: String(id), action: 'created', actor: input.actor });
-  return getKbEntry(id)!;
+  logAudit({ entity: 'kb', entityId: String(id), action: 'created', actor: input.actor }, conn);
+  return getKbEntry(id, conn)!;
 }
 
-export function deleteKb(id: number, actor?: string): void {
-  db().prepare('DELETE FROM kb_entries WHERE id = ?').run(id);
-  db().prepare('DELETE FROM embeddings WHERE id = ?').run(`kb:${id}`);
-  logAudit({ entity: 'kb', entityId: String(id), action: 'deleted', actor });
+export function deleteKb(id: number, actor?: string, conn: DatabaseSync = db()): void {
+  conn.prepare('DELETE FROM kb_entries WHERE id = ?').run(id);
+  conn.prepare('DELETE FROM embeddings WHERE id = ?').run(`kb:${id}`);
+  logAudit({ entity: 'kb', entityId: String(id), action: 'deleted', actor }, conn);
 }
 
 /**

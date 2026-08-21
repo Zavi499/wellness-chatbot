@@ -19,7 +19,6 @@ import {
 import { startLabelJob, getCurrentJob, isJobRunning } from '../labeling/job.js';
 import { listKb, upsertKb, deleteKb, getKbEntry } from '../kb/repository.js';
 import { reindexKbEntry, reindexProducts } from '../search/embeddings.js';
-import { listEscalations, resolveEscalation } from '../safety/engine.js';
 import { kpiSummary, auditTrail } from '../analytics/audit.js';
 import { getSettings, setSettings, missingSettings, type SettingKey } from '../settings/repository.js';
 import { normalizeWooProduct, type WooRawProduct } from '../products/normalize.js';
@@ -208,26 +207,6 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/admin/kb/:id/history', async (request) => {
     const params = request.params as { id: string };
     return { entry: getKbEntry(Number(params.id)), audit: auditTrail('kb', params.id, 50) };
-  });
-
-  // --- Escalation log -------------------------------------------------------
-  app.get('/api/admin/escalations', async (request) => {
-    const q = request.query as { status?: string; urgency?: string; limit?: string; offset?: string };
-    return {
-      rows: listEscalations({
-        status: q.status,
-        urgency: q.urgency,
-        limit: Number(q.limit ?? 50),
-        offset: Number(q.offset ?? 0),
-      }),
-    };
-  });
-
-  app.post('/api/admin/escalations/:id/resolve', async (request) => {
-    const params = request.params as { id: string };
-    const body = (request.body ?? {}) as { note?: string };
-    resolveEscalation(Number(params.id), body.note ?? '', identityOf(request).user);
-    return { ok: true };
   });
 
   // --- Analytics ------------------------------------------------------------

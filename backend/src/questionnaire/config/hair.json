@@ -134,12 +134,7 @@
         { "value": "sudden", "label_en": "It started suddenly", "label_ar": "بدأ فجأة" },
         { "value": "recent", "label_en": "A few weeks", "label_ar": "منذ أسابيع قليلة" },
         { "value": "gradual", "label_en": "Gradually over months or years", "label_ar": "تدريجياً خلال شهور أو سنوات" }
-      ],
-      "escalate": {
-        "values": ["sudden"],
-        "urgency": "pharmacist_review",
-        "reason": "Sudden hair loss should be medically evaluated rather than treated with cosmetic products."
-      }
+      ]
     },
     {
       "key": "hair_loss_symptoms",
@@ -153,12 +148,7 @@
         { "value": "redness_scaling", "label_en": "Redness or scaling", "label_ar": "احمرار أو تقشر" },
         { "value": "scarring", "label_en": "Scarring", "label_ar": "ندبات" },
         { "value": "none", "label_en": "None of these", "label_ar": "لا شيء مما سبق" }
-      ],
-      "escalate": {
-        "values": ["bald_patches", "scalp_pain", "redness_scaling", "scarring"],
-        "urgency": "pharmacist_review",
-        "reason": "Patchy or symptomatic hair loss needs medical evaluation before cosmetic products."
-      }
+      ]
     },
     {
       "key": "hair_loss_context",
@@ -174,12 +164,7 @@
         { "value": "medication", "label_en": "Taking a medication", "label_ar": "أتناول دواءً" },
         { "value": "none", "label_en": "None of these", "label_ar": "لا شيء مما سبق" },
         { "value": "prefer_not_say", "label_en": "Prefer not to say", "label_ar": "أفضل عدم الإفصاح" }
-      ],
-      "escalate": {
-        "values": ["pregnancy_postpartum", "diagnosed_condition", "medication"],
-        "urgency": "pharmacist_review",
-        "reason": "Hair loss with a pregnancy, medical or medication context needs pharmacist guidance."
-      }
+      ]
     }
   ]
 }

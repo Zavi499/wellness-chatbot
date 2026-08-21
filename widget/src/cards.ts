@@ -1,9 +1,8 @@
 /**
- * Recommendation cards, the compare drawer and the human-handover block
- * (spec §4.7, §9.2).
+ * Recommendation cards and the compare drawer (spec §4.7, §9.2).
  */
 import { el, clear } from './dom.js';
-import type { HandoffOptions, RecommendationItem, RecommendationSet, Strings } from './types.js';
+import type { RecommendationItem, RecommendationSet, Strings } from './types.js';
 
 export interface CardCallbacks {
   onViewProduct: (item: RecommendationItem) => void;
@@ -164,45 +163,6 @@ export function renderCompareDrawer(
 
   drawer.append(el('div', { class: 'wwc-drawer-body' }, [table]));
   return drawer;
-}
-
-/**
- * Handover block. Renders only the channels the store actually configured —
- * an unconfigured channel is absent rather than shown as a dead link.
- */
-export function renderHandoff(handoff: HandoffOptions, strings: Strings): HTMLElement {
-  const box = el('div', { class: 'wwc-handoff' });
-
-  if (handoff.whatsapp_url) {
-    box.append(
-      el('a', {
-        class: 'wwc-btn wwc-btn-primary',
-        href: handoff.whatsapp_url,
-        target: '_blank',
-        rel: 'noopener',
-        text: strings.talkToHuman,
-      }),
-    );
-  }
-
-  if (handoff.phone) {
-    box.append(
-      el('a', {
-        class: 'wwc-btn wwc-btn-ghost',
-        href: `tel:${handoff.phone.replace(/[^\d+]/g, '')}`,
-        text: `${strings.callUs} ${handoff.phone}`,
-      }),
-    );
-  }
-
-  if (handoff.live_chat_note) {
-    box.append(el('p', { class: 'wwc-handoff-note', text: handoff.live_chat_note }));
-  }
-  if (handoff.hours) {
-    box.append(el('p', { class: 'wwc-handoff-note', text: handoff.hours }));
-  }
-
-  return box;
 }
 
 /** Thumbs up/down with an optional reason (spec §9.2, KPI in §14). */

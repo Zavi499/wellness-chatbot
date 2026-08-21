@@ -1,8 +1,7 @@
 /**
  * OpenAI tool definitions and their executors (spec §4.3).
  *
- * Each executor re-validates server-side. The model choosing not to call
- * `escalate_to_human` never bypasses the rule engine, and the model calling
+ * Each executor re-validates server-side — the model calling
  * `get_recommendations` never bypasses the eligibility filter.
  */
 import type OpenAI from 'openai';
@@ -13,9 +12,8 @@ import { buildProfile } from '../recommend/profile.js';
 import { selectTopThree, toRecommendationSet } from '../recommend/select.js';
 import { isProductCategory, type ProductCategory } from '../products/category.js';
 import { recordAnswer } from './session.js';
-import { escalationForAnswer, questionnaireForTopic } from '../questionnaire/engine.js';
 import { logEvent } from '../analytics/audit.js';
-import type { EscalationUrgency, Language, RecommendationSet, SessionState } from '../types.js';
+import type { Language, RecommendationSet, SessionState } from '../types.js';
 
 export const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
@@ -75,22 +73,6 @@ export const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
-      name: 'escalate_to_human',
-      description:
-        "Hand this conversation to a human. MUST be called (and selling must stop) for: difficulty breathing, facial/tongue swelling, severe allergic reaction, fainting, chest pain, stroke symptoms, severe bleeding, suspected poisoning/overdose, severe eye pain or sudden vision change, chemical exposure, severe blistering/peeling rash with fever, or a clearly very unwell infant/child — mark urgency 'emergency'. MUST also be called (selling may pause on this topic but the rest of the conversation can continue) for: pregnancy/breastfeeding product suitability, products for infants or young children with unclear age suitability, medicine interaction questions, chronic condition or prescription-treatment context, persistent/severe/infected/unexplained symptoms, a request for diagnosis or a treatment/dose change, or when the needed product information is missing, conflicting, or unverified — mark urgency 'pharmacist_review'.",
-      parameters: {
-        type: 'object',
-        properties: {
-          reason: { type: 'string' },
-          urgency: { type: 'string', enum: ['emergency', 'pharmacist_review'] },
-        },
-        required: ['reason', 'urgency'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
       name: 'search_products',
       description:
         'Free-text/semantic search over the verified product catalog, e.g. when the customer names a specific product or brand rather than going through the questionnaire.',
@@ -113,8 +95,6 @@ export interface ToolOutcome {
   result: string;
   /** Structured payload the widget renders, if this tool produced one. */
   recommendations?: RecommendationSet;
-  /** Set when the model asked to escalate. */
-  escalation?: { urgency: EscalationUrgency; reason: string };
 }
 
 async function runGetFaqAnswer(args: { topic?: string }, ctx: ToolContext): Promise<ToolOutcome> {
@@ -155,23 +135,6 @@ function runSubmitAnswer(
   if (!key) return { result: JSON.stringify({ ok: false, error: 'question_key is required' }) };
 
   recordAnswer(ctx.session, key, value);
-
-  // The questionnaire's own escalation rules fire regardless of the model.
-  const topic = ctx.session.answers.help_topic;
-  const questionnaireId = questionnaireForTopic(typeof topic === 'string' ? topic : undefined);
-  const escalation = questionnaireId ? escalationForAnswer(questionnaireId, key, value) : null;
-
-  if (escalation) {
-    return {
-      result: JSON.stringify({
-        ok: true,
-        recorded: { [key]: value },
-        safety_note: `This answer requires escalation: ${escalation.reason}`,
-      }),
-      escalation: { urgency: escalation.urgency, reason: escalation.reason },
-    };
-  }
-
   return { result: JSON.stringify({ ok: true, recorded: { [key]: value } }) };
 }
 
@@ -179,17 +142,6 @@ function runGetRecommendations(
   args: { category?: string; must_exclude_product_ids?: number[] },
   ctx: ToolContext,
 ): ToolOutcome {
-  // Selling is off after an emergency — the model does not get to override it.
-  if (ctx.session.escalation.selling_blocked) {
-    return {
-      result: JSON.stringify({
-        blocked: true,
-        reason:
-          'Selling is disabled for this conversation because an emergency-level concern was raised. Do not recommend products.',
-      }),
-    };
-  }
-
   const requested = args.category ?? '';
   const fallback = ctx.session.answers.help_topic;
   const categoryKey = isProductCategory(requested)
@@ -266,10 +218,6 @@ function summarizeRejections(rejected: { reasons: string[] }[]): Record<string, 
 }
 
 async function runSearchProducts(args: { query?: string }, ctx: ToolContext): Promise<ToolOutcome> {
-  if (ctx.session.escalation.selling_blocked) {
-    return { result: JSON.stringify({ blocked: true, reason: 'Selling is disabled for this conversation.' }) };
-  }
-
   const hits = await searchProducts(args.query ?? '', 6);
   // Only verified, in-stock products may be named to a customer (spec §3.4).
   const visible = hits.filter(
@@ -298,19 +246,6 @@ async function runSearchProducts(args: { query?: string }, ctx: ToolContext): Pr
   };
 }
 
-function runEscalate(args: { reason?: string; urgency?: string }): ToolOutcome {
-  const urgency: EscalationUrgency = args.urgency === 'emergency' ? 'emergency' : 'pharmacist_review';
-  return {
-    result: JSON.stringify({
-      escalated: true,
-      urgency,
-      instruction:
-        'A human handover has been arranged and the approved message is already being shown to the customer. Keep your own reply short, warm, and free of product suggestions on this topic.',
-    }),
-    escalation: { urgency, reason: args.reason ?? 'Escalation requested by the assistant' },
-  };
-}
-
 export async function executeTool(
   name: string,
   rawArgs: string,
@@ -332,8 +267,6 @@ export async function executeTool(
       return runGetRecommendations(args as { category?: string; must_exclude_product_ids?: number[] }, ctx);
     case 'search_products':
       return runSearchProducts(args as { query?: string }, ctx);
-    case 'escalate_to_human':
-      return runEscalate(args as { reason?: string; urgency?: string });
     default:
       return { result: JSON.stringify({ error: `Unknown tool: ${name}` }) };
   }

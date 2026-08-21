@@ -353,54 +353,6 @@
 	margin-top: 8px;
 }
 
-/* --- Escalations ----------------------------------------------------------- */
-.wwc-escalation {
-	background: #fff;
-	border: 1px solid var(--wwc-border);
-	border-inline-start: 4px solid #dba617;
-	border-radius: 6px;
-	padding: 16px;
-	margin-bottom: 16px;
-}
-
-.wwc-escalation.wwc-emergency {
-	border-inline-start-color: #d63638;
-	background: #fffafa;
-}
-
-.wwc-escalation h2 {
-	margin: 0 0 6px;
-	font-size: 15px;
-}
-
-.wwc-transcript {
-	background: #f6f7f7;
-	border-radius: 4px;
-	padding: 10px 14px;
-	margin-top: 8px;
-	max-height: 320px;
-	overflow-y: auto;
-}
-
-.wwc-turn {
-	margin: 0 0 8px;
-	font-size: 13px;
-	line-height: 1.5;
-}
-
-.wwc-turn-assistant {
-	color: var(--wwc-primary-text);
-}
-
-.wwc-resolve-form {
-	margin-top: 10px;
-}
-
-.wwc-resolved {
-	color: #007017;
-	font-size: 13px;
-}
-
 /* --- Checklist ------------------------------------------------------------- */
 .wwc-checklist,
 .wwc-list {
