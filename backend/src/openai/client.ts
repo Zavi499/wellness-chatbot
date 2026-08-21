@@ -6,6 +6,7 @@
  */
 import OpenAI from 'openai';
 import { config } from '../config.js';
+import { getModelOverrides } from '../settings/repository.js';
 
 let client: OpenAI | null = null;
 
@@ -21,14 +22,32 @@ export function openai(): OpenAI {
   return client;
 }
 
-/** Model tiers, resolved from config so a retired ID is a one-line env change. */
+/**
+ * Model tiers. Checks the live, WordPress-settable override first (see
+ * `settings/repository.ts` `getModelOverrides()`) and falls back to the
+ * OPENAI_MODEL_* env var otherwise — so a wrong or retired model ID can be
+ * fixed from the dashboard without SSH access or a redeploy. `embed` is
+ * deliberately not overridable this way: changing the embedding model
+ * changes vector dimensions, which needs a full re-index, not a live swap.
+ */
 export const models = {
   /** Live conversation turns — balanced cost/quality. */
-  chat: () => config.openai.chatModel,
+  chat: () => getModelOverrides().chat ?? config.openai.chatModel,
   /** High-volume, low-risk work: language detection, query normalization. */
-  cheap: () => config.openai.cheapModel,
+  cheap: () => getModelOverrides().cheap ?? config.openai.cheapModel,
   /** Product auto-labeling, where accuracy matters most. */
-  label: () => config.openai.labelModel,
+  label: () => getModelOverrides().label ?? config.openai.labelModel,
   /** Embeddings for semantic product/FAQ search. */
   embed: () => config.openai.embedModel,
 };
+
+/**
+ * Every model id currently available to this API key, straight from OpenAI —
+ * not a hardcoded list here, since any list baked into this codebase can go
+ * stale the moment OpenAI ships or retires a model. Used to populate the
+ * model picker in the WordPress dashboard.
+ */
+export async function listAvailableModels(): Promise<string[]> {
+  const list = await openai().models.list();
+  return list.data.map((m) => m.id).sort();
+}

@@ -113,6 +113,30 @@
 	margin-bottom: 2px;
 }
 
+.wwc-model-list {
+	background: var(--wwc-50);
+	border-radius: 4px;
+	padding: 10px 14px;
+	margin: 4px 0 10px;
+	max-height: 260px;
+	overflow-y: auto;
+	font-size: 13px;
+}
+
+.wwc-model-list ul {
+	margin: 0;
+	padding-inline-start: 0;
+	list-style: none;
+}
+
+.wwc-model-list li {
+	margin-bottom: 2px;
+}
+
+.wwc-model-list .button-link {
+	font-family: Consolas, Menlo, Monaco, monospace;
+}
+
 /* --- Labeling progress (AJAX) -------------------------------------------- */
 .wwc-label-progress {
 	margin-top: 12px;

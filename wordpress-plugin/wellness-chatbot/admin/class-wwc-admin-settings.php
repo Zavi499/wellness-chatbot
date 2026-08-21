@@ -19,6 +19,7 @@ class WWC_Admin_Settings {
 		add_action( 'admin_post_wwc_save_settings', array( __CLASS__, 'handle_save' ) );
 		add_action( 'admin_post_wwc_export_catalogue', array( __CLASS__, 'handle_export' ) );
 		add_action( 'admin_post_wwc_upload_catalogue', array( __CLASS__, 'handle_upload' ) );
+		add_action( 'wp_ajax_wwc_fetch_openai_models', array( __CLASS__, 'ajax_fetch_openai_models' ) );
 	}
 
 	public static function render() {
@@ -35,11 +36,11 @@ class WWC_Admin_Settings {
 		self::render_connection();
 		self::render_business();
 		self::render_widget();
+		self::render_models();
 
 		printf( '<p><button type="submit" class="button button-primary">%s</button></p>', esc_html__( 'Save settings', 'wellness-chatbot' ) );
 		echo '</form>';
 
-		self::render_launch_checklist();
 		self::render_maintenance();
 	}
 
@@ -178,27 +179,99 @@ class WWC_Admin_Settings {
 		}
 	}
 
-	private static function render_launch_checklist() {
-		$missing = WWC_Settings::missing_business_fields();
+	/**
+	 * Lets an admin fix a wrong or retired OpenAI model id from wp-admin,
+	 * without SSH access or a redeploy. Blank means "use whatever the
+	 * backend's OPENAI_MODEL_* environment variable is set to".
+	 */
+	private static function render_models() {
+		echo '<h2>' . esc_html__( 'AI models', 'wellness-chatbot' ) . '</h2>';
+		echo '<p class="description">' . esc_html__( 'Leave a field blank to use the backend server\'s own default. Setting one here takes effect immediately — no redeploy needed.', 'wellness-chatbot' ) . '</p>';
 
-		$items = array(
-			array( empty( $missing ), __( 'All business facts confirmed and entered', 'wellness-chatbot' ) ),
-			array( WWC_Settings::is_connected(), __( 'Backend connected', 'wellness-chatbot' ) ),
-			array( '' !== WWC_Settings::business_value( 'whatsapp_number' ) || '' !== WWC_Settings::business_value( 'phone_number' ), __( 'A contact channel (WhatsApp or phone) configured', 'wellness-chatbot' ) ),
-			array( '' !== WWC_Settings::business_value( 'returns_policy' ), __( 'Returns / exchange / refund policy explicitly confirmed', 'wellness-chatbot' ) ),
+		$overrides = array(
+			'chat'  => '',
+			'cheap' => '',
+			'label' => '',
+		);
+		if ( WWC_Settings::is_connected() ) {
+			$result = WWC_Backend_Client::get( '/api/admin/openai/model-overrides' );
+			if ( ! is_wp_error( $result ) && isset( $result['overrides'] ) && is_array( $result['overrides'] ) ) {
+				foreach ( $overrides as $key => $value ) {
+					if ( isset( $result['overrides'][ $key ] ) && null !== $result['overrides'][ $key ] ) {
+						$overrides[ $key ] = (string) $result['overrides'][ $key ];
+					}
+				}
+			}
+		}
+
+		$fields = array(
+			'chat'  => array(
+				'label' => __( 'Chat model', 'wellness-chatbot' ),
+				'help'  => __( 'Used for live conversation turns.', 'wellness-chatbot' ),
+			),
+			'cheap' => array(
+				'label' => __( 'Fast / cheap model', 'wellness-chatbot' ),
+				'help'  => __( 'Used for high-volume, low-risk work such as language detection.', 'wellness-chatbot' ),
+			),
+			'label' => array(
+				'label' => __( 'Labeling model', 'wellness-chatbot' ),
+				'help'  => __( 'Used for AI product auto-labeling, where accuracy matters most.', 'wellness-chatbot' ),
+			),
 		);
 
-		echo '<h2>' . esc_html__( 'Launch checklist', 'wellness-chatbot' ) . '</h2>';
-		echo '<ul class="wwc-checklist">';
-		foreach ( $items as $item ) {
+		echo '<table class="form-table" role="presentation"><tbody>';
+		foreach ( $fields as $key => $field ) {
+			$input_id = 'wwc_model_' . $key;
 			printf(
-				'<li class="%s">%s</li>',
-				$item[0] ? 'wwc-done' : 'wwc-todo',
-				esc_html( $item[1] )
+				'<tr><th scope="row"><label for="%1$s">%2$s</label></th><td><input type="text" id="%1$s" class="regular-text wwc-model-input" name="model_%3$s" data-tier="%3$s" value="%4$s" placeholder="%5$s" autocomplete="off" /><p class="description">%6$s</p></td></tr>',
+				esc_attr( $input_id ),
+				esc_html( $field['label'] ),
+				esc_attr( $key ),
+				esc_attr( $overrides[ $key ] ),
+				esc_attr__( 'backend default', 'wellness-chatbot' ),
+				esc_html( $field['help'] )
 			);
 		}
-		echo '</ul>';
-		echo '<p class="description">' . esc_html__( 'Also confirm before go-live: Arabic wording reviewed by a fluent speaker, and a named owner responsible for label review and KB updates.', 'wellness-chatbot' ) . '</p>';
+		echo '</tbody></table>';
+
+		printf(
+			'<p><button type="button" class="button" id="wwc-fetch-models">%s</button></p>',
+			esc_html__( 'Show available models from OpenAI', 'wellness-chatbot' )
+		);
+		echo '<div id="wwc-model-list" class="wwc-model-list" hidden></div>';
+	}
+
+	/**
+	 * Proxies to the backend, which asks OpenAI directly for the model ids
+	 * this API key can actually use right now — never a list hardcoded in
+	 * this plugin, since that would just go stale the same way the shipped
+	 * defaults did.
+	 */
+	public static function ajax_fetch_openai_models() {
+		check_ajax_referer( 'wwc_admin', 'nonce' );
+		if ( ! WWC_Roles::can_manage() ) {
+			wp_send_json_error( array( 'message' => __( 'You do not have permission to do that.', 'wellness-chatbot' ) ), 403 );
+			return;
+		}
+
+		$response = WWC_Backend_Client::get( '/api/admin/openai/models' );
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error( array( 'message' => $response->get_error_message() ), 502 );
+			return;
+		}
+		if ( empty( $response['ok'] ) ) {
+			wp_send_json_error(
+				array(
+					'message' => isset( $response['error'] )
+						? (string) $response['error']
+						: __( 'The backend could not reach OpenAI. Check OPENAI_API_KEY and the server\'s network access.', 'wellness-chatbot' ),
+				),
+				502
+			);
+			return;
+		}
+
+		wp_send_json_success( $response );
 	}
 
 	private static function render_maintenance() {
@@ -268,9 +341,19 @@ class WWC_Admin_Settings {
 		update_option( 'wwc_setup_complete', 1 );
 		delete_transient( 'wwc_show_setup_notice' );
 
-		// Push the facts to the backend so the assistant reads them live.
 		if ( WWC_Settings::is_connected() ) {
+			// Push the facts to the backend so the assistant reads them live.
 			WWC_Backend_Client::post( '/api/admin/settings', $business );
+
+			// Blank means "use the backend's own default" — sent as null so an
+			// override that was set can be cleared by emptying the field, not
+			// just left stuck at whatever was chosen last.
+			$models = array();
+			foreach ( array( 'chat', 'cheap', 'label' ) as $tier ) {
+				$value              = isset( $_POST[ 'model_' . $tier ] ) ? sanitize_text_field( wp_unslash( $_POST[ 'model_' . $tier ] ) ) : '';
+				$models[ $tier ] = '' === $value ? null : $value;
+			}
+			WWC_Backend_Client::post( '/api/admin/openai/model-overrides', $models );
 		}
 
 		WWC_Admin::redirect_back( self::PAGE, array( 'wwc_notice' => 'saved' ) );

@@ -20,7 +20,15 @@ import { startLabelJob, getCurrentJob, isJobRunning } from '../labeling/job.js';
 import { listKb, upsertKb, deleteKb, getKbEntry } from '../kb/repository.js';
 import { reindexKbEntry, reindexProducts } from '../search/embeddings.js';
 import { kpiSummary, auditTrail } from '../analytics/audit.js';
-import { getSettings, setSettings, missingSettings, type SettingKey } from '../settings/repository.js';
+import {
+  getSettings,
+  setSettings,
+  missingSettings,
+  getModelOverrides,
+  setModelOverrides,
+  type SettingKey,
+} from '../settings/repository.js';
+import { listAvailableModels, models } from '../openai/client.js';
 import { normalizeWooProduct, type WooRawProduct } from '../products/normalize.js';
 import { allProducts, countProducts, deleteProduct, getProduct, upsertWooFields } from '../products/repository.js';
 import { loadAllQuestionnaires, saveQuestionnaire, type QuestionnaireId } from '../questionnaire/loader.js';
@@ -68,11 +76,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       rows: reviewQueue(Number(q.limit ?? 50), Number(q.offset ?? 0)),
       counts: countProducts(),
       // Surfaced so the admin screen can show which model a labeling run will
-      // actually bill against before anyone clicks the button.
+      // actually bill against before anyone clicks the button — the real,
+      // effective model (override or env fallback), not just the raw env var.
       models: {
-        label: config.openai.labelModel,
-        chat: config.openai.chatModel,
-        cheap: config.openai.cheapModel,
+        label: models.label(),
+        chat: models.chat(),
+        cheap: models.cheap(),
         embed: config.openai.embedModel,
       },
     };
@@ -225,6 +234,29 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const body = (request.body ?? {}) as Partial<Record<SettingKey, string | null>>;
     const settings = setSettings(body, identityOf(request).user);
     return { ok: true, settings, missing: missingSettings() };
+  });
+
+  // --- OpenAI model overrides -------------------------------------------------
+  // Lets the WordPress dashboard fix a wrong or retired model id without SSH
+  // access or a redeploy. See `settings/repository.ts` getModelOverrides().
+  app.get('/api/admin/openai/models', async (_request, reply) => {
+    try {
+      const models = await listAvailableModels();
+      return { ok: true, models };
+    } catch (err) {
+      // Most likely cause: OPENAI_API_KEY missing/invalid, or the backend
+      // cannot reach OpenAI at all — this endpoint doubles as a live check
+      // for exactly that, independent of the model chosen.
+      return reply.code(502).send({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get('/api/admin/openai/model-overrides', async () => ({ overrides: getModelOverrides() }));
+
+  app.post('/api/admin/openai/model-overrides', async (request) => {
+    const body = (request.body ?? {}) as Partial<Record<'chat' | 'cheap' | 'label', string | null>>;
+    const overrides = setModelOverrides(body, identityOf(request).user);
+    return { ok: true, overrides };
   });
 
   // --- Questionnaire config -------------------------------------------------

@@ -125,7 +125,10 @@ export async function handleTurn(input: TurnInput): Promise<ChatResponse> {
       }
     }
   } catch (err) {
-    // A model or network failure must not look like a confident answer.
+    // A model or network failure must not look like a confident answer to the
+    // customer — but it must not vanish either. Without this, "every message
+    // fails" is undiagnosable from the server side.
+    console.error('[handleTurn] OpenAI call failed:', err);
     const text =
       language === 'ar'
         ? 'عذراً، حدث خلل تقني عندي الآن. يمكنك المحاولة مرة أخرى بعد قليل.'

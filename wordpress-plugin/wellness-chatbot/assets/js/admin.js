@@ -212,8 +212,66 @@
 		}
 	}
 
+	/**
+	 * "Show available models" on the Settings screen: fetches the live list
+	 * from OpenAI (via the backend, never hardcoded here) and lets a click
+	 * fill whichever of the three model inputs was last focused — so picking
+	 * one is a single click, not a copy-paste.
+	 */
+	function initModelPicker() {
+		var inputs = document.querySelectorAll( '.wwc-model-input' );
+		var fetchButton = document.getElementById( 'wwc-fetch-models' );
+		var listEl = document.getElementById( 'wwc-model-list' );
+		if ( ! fetchButton || ! listEl || ! inputs.length ) {
+			return;
+		}
+
+		var lastFocused = inputs[ 0 ];
+		inputs.forEach( function ( input ) {
+			input.addEventListener( 'focus', function () {
+				lastFocused = input;
+			} );
+		} );
+
+		var loaded = false;
+		fetchButton.addEventListener( 'click', function () {
+			if ( loaded ) {
+				listEl.hidden = ! listEl.hidden;
+				return;
+			}
+			listEl.hidden = false;
+			listEl.textContent = 'Loading…';
+
+			ajaxRequest( 'wwc_fetch_openai_models' ).then( function ( result ) {
+				if ( ! result.ok || ! result.data || ! result.data.models || ! result.data.models.length ) {
+					listEl.textContent = ( result.data && result.data.message ) ||
+						'Could not reach OpenAI. Check the backend’s OPENAI_API_KEY and its network access.';
+					return;
+				}
+				loaded = true;
+				listEl.innerHTML = '';
+				var list = document.createElement( 'ul' );
+				result.data.models.forEach( function ( id ) {
+					var item = document.createElement( 'li' );
+					var pick = document.createElement( 'button' );
+					pick.type = 'button';
+					pick.className = 'button-link';
+					pick.textContent = id;
+					pick.addEventListener( 'click', function () {
+						( lastFocused || inputs[ 0 ] ).value = id;
+						( lastFocused || inputs[ 0 ] ).focus();
+					} );
+					item.appendChild( pick );
+					list.appendChild( item );
+				} );
+				listEl.appendChild( list );
+			} );
+		} );
+	}
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		initLabelingRunner();
+		initModelPicker();
 
 		confirmBefore(
 			'.wwc-confirm-reject',
