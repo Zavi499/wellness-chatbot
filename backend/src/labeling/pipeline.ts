@@ -367,25 +367,29 @@ export function resetUnreviewedLabels(
 }
 
 /**
- * Wipes EVERY AI-generated label back to a clean, never-labeled state —
- * verified and partial included, not just unreviewed leftovers — so the
- * catalogue can be relabeled from scratch (new prompt, new model, or the
- * store owner just wants a do-over). This is the deliberately destructive
- * sibling of `resetUnreviewedLabels()`.
+ * Wipes AI-generated labels back to a clean, never-labeled state — verified
+ * and partial included, not just unreviewed leftovers — so the catalogue can
+ * be relabeled from scratch (new prompt, new model, or the store owner just
+ * wants a do-over). This is the deliberately destructive sibling of
+ * `resetUnreviewedLabels()`.
  *
- * The one invariant that still can never be violated: a product a human
- * verified themselves (`ai_generated = 0`) is never touched by this, full
- * stop — that data was never "training," it's someone's own writing, and no
- * reset-and-relabel action should be able to erase it. The query below only
- * ever selects `ai_generated = 1` rows, regardless of verification_status.
+ * By default, a product a human verified themselves (`ai_generated = 0`) is
+ * left alone — that data was never "training," it's someone's own writing.
+ * Pass `includeHumanVerified: true` for a true, no-exceptions fresh start
+ * that also wipes those — an explicit, opt-in choice at the call site (the WP
+ * dashboard surfaces it as a separate checkbox, not the default action),
+ * since it discards content nobody can regenerate from a button click.
  */
 export function resetAllAiLabels(
   actor?: string,
   conn: DatabaseSync = db(),
+  options: { includeHumanVerified?: boolean } = {},
 ): { products_reset: number; drafts_removed: number } {
-  const targets = conn
-    .prepare(`SELECT product_id FROM products WHERE ai_generated = 1`)
-    .all() as { product_id: number }[];
+  const targets = options.includeHumanVerified
+    ? (conn.prepare(`SELECT product_id FROM products`).all() as { product_id: number }[])
+    : (conn
+        .prepare(`SELECT product_id FROM products WHERE ai_generated = 1`)
+        .all() as { product_id: number }[]);
 
   for (const { product_id } of targets) {
     updateWwcFields(product_id, RESET_PATCH, conn);
@@ -407,7 +411,11 @@ export function resetAllAiLabels(
       entityId: 'bulk',
       action: 'ai_labels_reset_all',
       actor,
-      detail: { products_reset: targets.length, drafts_removed: draftsRemoved },
+      detail: {
+        products_reset: targets.length,
+        drafts_removed: draftsRemoved,
+        included_human_verified: options.includeHumanVerified === true,
+      },
     },
     conn,
   );

@@ -193,13 +193,18 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   // reset-unreviewed, doubly so here since this discards live, customer-facing
   // AI content, not just pending drafts.
   app.post('/api/admin/labels/reset-all', async (request, reply) => {
-    const body = (request.body ?? {}) as { confirm?: boolean };
+    const body = (request.body ?? {}) as { confirm?: boolean; include_human_verified?: boolean };
     if (body.confirm !== true) {
       return reply.code(400).send({ error: 'Set confirm: true to reset ALL AI labels.' });
     }
     const identity = identityOf(request);
-    const result = resetAllAiLabels(identity.user);
-    request.log.warn({ result, actor: identity.user }, 'ALL AI labels reset');
+    const result = resetAllAiLabels(identity.user, undefined, {
+      includeHumanVerified: body.include_human_verified === true,
+    });
+    request.log.warn(
+      { result, actor: identity.user, includeHumanVerified: body.include_human_verified === true },
+      'ALL AI labels reset',
+    );
     return { ok: true, ...result, products: countProducts() };
   });
 

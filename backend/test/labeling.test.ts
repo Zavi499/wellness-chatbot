@@ -279,6 +279,29 @@ describe('resetAllAiLabels', () => {
     assert.equal(getProduct(32, conn)!.ai_generated, false);
     assert.equal(getProduct(33, conn)!.verification_status, 'verified', 'human data untouched');
   });
+
+  test('includeHumanVerified: true also wipes a human-verified product', () => {
+    const conn = openMemoryDb();
+    seedProduct(conn, 40, { ai_generated: true, verification_status: 'verified' });
+    seedProduct(conn, 41, {
+      ai_generated: false,
+      verification_status: 'verified',
+      concern_primary: { en: ['dryness'], ar: [] },
+    });
+    insertDraft(conn, 41, 'approved');
+
+    const result = resetAllAiLabels('tester', conn, { includeHumanVerified: true });
+
+    assert.equal(result.products_reset, 2, 'both the AI and human-verified product reset');
+    const human = getProduct(41, conn)!;
+    assert.equal(human.verification_status, 'unverified');
+    assert.deepEqual(human.concern_primary, { en: [], ar: [] });
+
+    const remainingDrafts = conn
+      .prepare('SELECT COUNT(*) AS c FROM label_drafts WHERE product_id = 41')
+      .get() as { c: number };
+    assert.equal(remainingDrafts.c, 0, 'the human-approved draft is wiped too for a true fresh start');
+  });
 });
 
 function insertPendingDraft(conn: ReturnType<typeof openMemoryDb>, productId: number): number {
