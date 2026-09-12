@@ -22,6 +22,7 @@ class WWC_Admin_Labels {
 		add_action( 'admin_post_wwc_relabel', array( __CLASS__, 'handle_relabel' ) );
 		add_action( 'admin_post_wwc_bulk_approve', array( __CLASS__, 'handle_bulk_approve' ) );
 		add_action( 'admin_post_wwc_reset_labels', array( __CLASS__, 'handle_reset_labels' ) );
+		add_action( 'admin_post_wwc_reset_all_labels', array( __CLASS__, 'handle_reset_all_labels' ) );
 
 		// AJAX, not admin-post.php: starting a labeling batch used to be a
 		// blocking form submission that held the page open for the entire
@@ -77,7 +78,10 @@ class WWC_Admin_Labels {
 			self::render_pagination( $page, count( $rows ), $limit );
 		}
 
-		self::render_danger_zone( isset( $counts['queued'] ) ? (int) $counts['queued'] : 0 );
+		self::render_danger_zone(
+			isset( $counts['queued'] ) ? (int) $counts['queued'] : 0,
+			isset( $counts['ai_labeled'] ) ? (int) $counts['ai_labeled'] : 0
+		);
 	}
 
 	/**
@@ -192,9 +196,10 @@ class WWC_Admin_Labels {
 	 * Never touches anything a human has already verified or partially
 	 * approved — enforced server-side, not just by this UI.
 	 *
-	 * @param int $queued Roughly how many products are currently unreviewed.
+	 * @param int $queued     Roughly how many products are currently unreviewed.
+	 * @param int $ai_labeled How many products currently carry any AI-generated label.
 	 */
-	private static function render_danger_zone( $queued ) {
+	private static function render_danger_zone( $queued, $ai_labeled = 0 ) {
 		echo '<div class="wwc-danger-zone">';
 		echo '<h2>' . esc_html__( 'Danger zone', 'wellness-chatbot' ) . '</h2>';
 		printf(
@@ -213,6 +218,30 @@ class WWC_Admin_Labels {
 		printf(
 			'<button type="submit" class="button button-link-delete wwc-confirm-reset">%s</button>',
 			esc_html__( 'Clear all unreviewed AI drafts', 'wellness-chatbot' )
+		);
+		echo '</form>';
+
+		echo '<hr />';
+		printf(
+			'<p class="description"><strong>%s</strong></p>',
+			esc_html__( 'Start AI labeling over from scratch', 'wellness-chatbot' )
+		);
+		printf(
+			'<p class="description">%s</p>',
+			esc_html(
+				sprintf(
+					/* translators: %d: number of products currently carrying any AI-generated label. */
+					__( 'Wipes every AI-generated label — including ones already verified and currently shown to customers (roughly %d products right now) — back to a clean, never-labeled state. Use this only when you want the whole catalogue relabeled from zero, e.g. after changing the labeling prompt or model. Anything you or your pharmacist wrote/verified by hand is never touched. After this, use "Run AI labeling now" above to relabel the catalogue.', 'wellness-chatbot' ),
+					$ai_labeled
+				)
+			)
+		);
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+		wp_nonce_field( 'wwc_reset_all_labels' );
+		echo '<input type="hidden" name="action" value="wwc_reset_all_labels" />';
+		printf(
+			'<button type="submit" class="button button-link-delete wwc-confirm-reset-all">%s</button>',
+			esc_html__( 'Reset ALL AI labels and start over', 'wellness-chatbot' )
 		);
 		echo '</form>';
 		echo '</div>';
@@ -632,6 +661,28 @@ class WWC_Admin_Labels {
 		WWC_Admin::redirect_back(
 			WWC_Admin::MENU_SLUG,
 			array( 'wwc_notice' => is_wp_error( $response ) ? 'failed' : 'reset' )
+		);
+	}
+
+	/**
+	 * Wipes every AI-generated label, verified and partial included, back to
+	 * a clean, never-labeled state so the catalogue can be relabeled from
+	 * scratch. The backend independently guarantees this can never touch a
+	 * product a human wrote/verified themselves — this handler doesn't need
+	 * to re-check that, only pass the confirmation through.
+	 */
+	public static function handle_reset_all_labels() {
+		WWC_Admin::verify_post( 'wwc_reset_all_labels' );
+
+		$response = WWC_Backend_Client::post(
+			'/api/admin/labels/reset-all',
+			array( 'confirm' => true ),
+			array( 'timeout' => 90 )
+		);
+
+		WWC_Admin::redirect_back(
+			WWC_Admin::MENU_SLUG,
+			array( 'wwc_notice' => is_wp_error( $response ) ? 'failed' : 'reset_all' )
 		);
 	}
 

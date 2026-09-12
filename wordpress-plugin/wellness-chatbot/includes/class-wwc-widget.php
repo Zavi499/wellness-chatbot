@@ -69,7 +69,7 @@ class WWC_Widget {
 			'wellness-chatbot-widget',
 			WWC_URL . 'assets/css/widget.css',
 			array(),
-			WWC_VERSION
+			wwc_asset_version( 'assets/css/widget.css' )
 		);
 
 		// The brand ramp is injected as CSS variables so the widget inherits the
@@ -83,7 +83,7 @@ class WWC_Widget {
 			'wellness-chatbot-widget',
 			WWC_URL . 'assets/js/widget.js',
 			array(),
-			WWC_VERSION,
+			wwc_asset_version( 'assets/js/widget.js' ),
 			true
 		);
 

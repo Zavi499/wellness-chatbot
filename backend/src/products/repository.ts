@@ -280,7 +280,9 @@ export function setStockStatus(
     .run(status, nowIso(), productId);
 }
 
-export function countProducts(conn: DatabaseSync = db()): { total: number; verified: number; queued: number } {
+export function countProducts(
+  conn: DatabaseSync = db(),
+): { total: number; verified: number; queued: number; ai_labeled: number } {
   const total = Number(
     (conn.prepare('SELECT COUNT(*) AS c FROM products').get() as Row).c ?? 0,
   );
@@ -294,5 +296,8 @@ export function countProducts(conn: DatabaseSync = db()): { total: number; verif
   const queued = Number(
     (conn.prepare(`SELECT COUNT(*) AS c FROM label_drafts WHERE status = 'pending'`).get() as Row).c ?? 0,
   );
-  return { total, verified, queued };
+  const aiLabeled = Number(
+    (conn.prepare(`SELECT COUNT(*) AS c FROM products WHERE ai_generated = 1`).get() as Row).c ?? 0,
+  );
+  return { total, verified, queued, ai_labeled: aiLabeled };
 }

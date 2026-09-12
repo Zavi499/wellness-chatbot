@@ -293,6 +293,10 @@
 			'.wwc-confirm-reset',
 			'Clear every unreviewed AI draft and reset those products back to never-labeled? This cannot be undone. Verified and partial products are not affected.'
 		);
+		confirmBefore(
+			'.wwc-confirm-reset-all',
+			'Reset ALL AI labels, including ones already verified and live on the site right now, back to never-labeled? This cannot be undone. Products a human wrote or verified themselves are not affected. You will need to run AI labeling again afterwards.'
+		);
 
 		// Bulk-select bar: keep both submit buttons disabled until something is
 		// actually selected, and let "select all" toggle every eligible row.

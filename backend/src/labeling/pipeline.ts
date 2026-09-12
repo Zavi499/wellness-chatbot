@@ -367,6 +367,55 @@ export function resetUnreviewedLabels(
 }
 
 /**
+ * Wipes EVERY AI-generated label back to a clean, never-labeled state —
+ * verified and partial included, not just unreviewed leftovers — so the
+ * catalogue can be relabeled from scratch (new prompt, new model, or the
+ * store owner just wants a do-over). This is the deliberately destructive
+ * sibling of `resetUnreviewedLabels()`.
+ *
+ * The one invariant that still can never be violated: a product a human
+ * verified themselves (`ai_generated = 0`) is never touched by this, full
+ * stop — that data was never "training," it's someone's own writing, and no
+ * reset-and-relabel action should be able to erase it. The query below only
+ * ever selects `ai_generated = 1` rows, regardless of verification_status.
+ */
+export function resetAllAiLabels(
+  actor?: string,
+  conn: DatabaseSync = db(),
+): { products_reset: number; drafts_removed: number } {
+  const targets = conn
+    .prepare(`SELECT product_id FROM products WHERE ai_generated = 1`)
+    .all() as { product_id: number }[];
+
+  for (const { product_id } of targets) {
+    updateWwcFields(product_id, RESET_PATCH, conn);
+  }
+
+  let draftsRemoved = 0;
+  if (targets.length > 0) {
+    const placeholders = targets.map(() => '?').join(',');
+    const ids = targets.map((t) => t.product_id);
+    const result = conn
+      .prepare(`DELETE FROM label_drafts WHERE product_id IN (${placeholders})`)
+      .run(...ids);
+    draftsRemoved = Number(result.changes ?? 0);
+  }
+
+  logAudit(
+    {
+      entity: 'product',
+      entityId: 'bulk',
+      action: 'ai_labels_reset_all',
+      actor,
+      detail: { products_reset: targets.length, drafts_removed: draftsRemoved },
+    },
+    conn,
+  );
+
+  return { products_reset: targets.length, drafts_removed: draftsRemoved };
+}
+
+/**
  * One-time migration: flips every currently-pending label draft straight to
  * `verified`, sight-unseen — including low-confidence and category-unresolved
  * ones. This mirrors, in bulk, what `labelProduct()` now does for every new

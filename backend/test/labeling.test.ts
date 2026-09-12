@@ -10,6 +10,7 @@ import { openMemoryDb, toJson } from '../src/db/index.js';
 import {
   isEligibleForLabeling,
   resetUnreviewedLabels,
+  resetAllAiLabels,
   applyReview,
   draftToPatch,
   autoVerifyPendingDrafts,
@@ -211,6 +212,72 @@ describe('resetUnreviewedLabels', () => {
     assert.equal(getProduct(12, conn)!.ai_generated, false);
     assert.equal(getProduct(11, conn)!.verification_status, 'verified', 'untouched');
     assert.equal(getProduct(13, conn)!.ai_generated, false, 'was already false, stays false');
+  });
+});
+
+describe('resetAllAiLabels', () => {
+  test('resets an AI-verified product, unlike resetUnreviewedLabels', () => {
+    const conn = openMemoryDb();
+    seedProduct(conn, 20, {
+      ai_generated: true,
+      ai_confidence: 0.9,
+      concern_primary: { en: ['acne'], ar: [] },
+      verification_status: 'verified',
+    });
+    insertDraft(conn, 20, 'approved');
+
+    const result = resetAllAiLabels('tester', conn);
+
+    assert.equal(result.products_reset, 1);
+    assert.equal(result.drafts_removed, 1);
+
+    const product = getProduct(20, conn)!;
+    assert.equal(product.ai_generated, false);
+    assert.equal(product.ai_confidence, null);
+    assert.equal(product.verification_status, 'unverified');
+    assert.deepEqual(product.concern_primary, { en: [], ar: [] });
+  });
+
+  test('resets an AI-labeled partial product too', () => {
+    const conn = openMemoryDb();
+    seedProduct(conn, 21, { ai_generated: true, verification_status: 'partial' });
+    insertDraft(conn, 21, 'approved');
+
+    const result = resetAllAiLabels('tester', conn);
+    assert.equal(result.products_reset, 1);
+    assert.equal(getProduct(21, conn)!.verification_status, 'unverified');
+  });
+
+  test('never touches a product a human wrote/verified themselves (ai_generated=false)', () => {
+    const conn = openMemoryDb();
+    seedProduct(conn, 22, {
+      ai_generated: false,
+      verification_status: 'verified',
+      concern_primary: { en: ['dryness'], ar: [] },
+    });
+
+    const result = resetAllAiLabels('tester', conn);
+
+    assert.equal(result.products_reset, 0);
+    const product = getProduct(22, conn)!;
+    assert.equal(product.verification_status, 'verified');
+    assert.deepEqual(product.concern_primary, { en: ['dryness'], ar: [] });
+  });
+
+  test('resets every AI-generated product regardless of status, in one call', () => {
+    const conn = openMemoryDb();
+    seedProduct(conn, 30, { ai_generated: true, verification_status: 'unverified' });
+    seedProduct(conn, 31, { ai_generated: true, verification_status: 'verified' });
+    seedProduct(conn, 32, { ai_generated: true, verification_status: 'partial' });
+    seedProduct(conn, 33, { ai_generated: false, verification_status: 'verified' }); // human — untouched
+
+    const result = resetAllAiLabels('tester', conn);
+
+    assert.equal(result.products_reset, 3, 'products 30, 31, 32 — not 33');
+    assert.equal(getProduct(30, conn)!.ai_generated, false);
+    assert.equal(getProduct(31, conn)!.ai_generated, false);
+    assert.equal(getProduct(32, conn)!.ai_generated, false);
+    assert.equal(getProduct(33, conn)!.verification_status, 'verified', 'human data untouched');
   });
 });
 

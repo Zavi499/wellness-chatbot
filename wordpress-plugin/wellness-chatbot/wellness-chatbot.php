@@ -3,7 +3,7 @@
  * Plugin Name:       Wellness Chatbot
  * Plugin URI:        https://www.wellnesspharmacykw.com/
  * Description:       AI shopping assistant for Wellness World — product finder and direct-answered FAQ. Thin integration layer; the AI orchestration runs in the companion backend service.
- * Version:           0.1.0
+ * Version:           0.1.1
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Wellness World
@@ -19,6 +19,21 @@ define( 'WWC_VERSION', '0.1.0' );
 define( 'WWC_FILE', __FILE__ );
 define( 'WWC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'WWC_URL', plugin_dir_url( __FILE__ ) );
+
+/**
+ * Cache-busting version for an enqueued asset. Uses the file's own mtime
+ * rather than the static WWC_VERSION constant, which is easy to forget to
+ * bump on a release and then leaves browsers and any host/CDN cache serving
+ * a stale widget.js indefinitely under the same `?ver=` query string.
+ *
+ * @param string $relative_path Path relative to the plugin root, e.g. 'assets/js/widget.js'.
+ * @return string
+ */
+function wwc_asset_version( $relative_path ) {
+	$full_path = WWC_PATH . ltrim( $relative_path, '/' );
+	$mtime     = file_exists( $full_path ) ? filemtime( $full_path ) : false;
+	return $mtime ? (string) $mtime : WWC_VERSION;
+}
 
 /**
  * PSR-ish autoloader for the plugin's `WWC_` classes.

@@ -56,10 +56,10 @@ class WWC_Admin {
 			return;
 		}
 
-		wp_enqueue_style( 'wellness-chatbot-admin', WWC_URL . 'assets/css/admin.css', array(), WWC_VERSION );
+		wp_enqueue_style( 'wellness-chatbot-admin', WWC_URL . 'assets/css/admin.css', array(), wwc_asset_version( 'assets/css/admin.css' ) );
 		wp_add_inline_style( 'wellness-chatbot-admin', '.wwc-admin {' . WWC_Brand::css_vars() . '}' );
 
-		wp_enqueue_script( 'wellness-chatbot-admin', WWC_URL . 'assets/js/admin.js', array(), WWC_VERSION, true );
+		wp_enqueue_script( 'wellness-chatbot-admin', WWC_URL . 'assets/js/admin.js', array(), wwc_asset_version( 'assets/js/admin.js' ), true );
 		wp_localize_script(
 			'wellness-chatbot-admin',
 			'WWC_ADMIN',
@@ -151,6 +151,7 @@ class WWC_Admin {
 			'rejected'            => array( 'success', __( 'Draft rejected. The product stays unverified.', 'wellness-chatbot' ) ),
 			'relabeled'           => array( 'success', __( 'AI labeling re-run. The new draft is at the top of the queue.', 'wellness-chatbot' ) ),
 			'reset'               => array( 'success', __( 'Unreviewed AI drafts cleared. Verified and partial products were left untouched.', 'wellness-chatbot' ) ),
+			'reset_all'           => array( 'success', __( 'All AI labels cleared. The catalogue is back to never-labeled — use "Run AI labeling now" to relabel it. Anything a human wrote/verified by hand was left untouched.', 'wellness-chatbot' ) ),
 			'failed'              => array( 'error', __( 'That did not work. Check the backend connection and try again.', 'wellness-chatbot' ) ),
 		);
 

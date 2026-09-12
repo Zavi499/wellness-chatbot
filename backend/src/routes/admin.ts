@@ -14,6 +14,7 @@ import {
   labelProduct,
   labelCatalogue,
   resetUnreviewedLabels,
+  resetAllAiLabels,
   isEligibleForLabeling,
 } from '../labeling/pipeline.js';
 import { startLabelJob, getCurrentJob, isJobRunning } from '../labeling/job.js';
@@ -182,6 +183,23 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const identity = identityOf(request);
     const result = resetUnreviewedLabels(identity.user);
     request.log.warn({ result, actor: identity.user }, 'Unreviewed AI labels reset');
+    return { ok: true, ...result, products: countProducts() };
+  });
+
+  // Wipes EVERY AI-generated label (verified and partial included) back to a
+  // clean, never-labeled state, so the catalogue can be relabeled from
+  // scratch. Never touches a product a human wrote/verified themselves — see
+  // resetAllAiLabels()'s own guard. `confirm` required for the same reason as
+  // reset-unreviewed, doubly so here since this discards live, customer-facing
+  // AI content, not just pending drafts.
+  app.post('/api/admin/labels/reset-all', async (request, reply) => {
+    const body = (request.body ?? {}) as { confirm?: boolean };
+    if (body.confirm !== true) {
+      return reply.code(400).send({ error: 'Set confirm: true to reset ALL AI labels.' });
+    }
+    const identity = identityOf(request);
+    const result = resetAllAiLabels(identity.user);
+    request.log.warn({ result, actor: identity.user }, 'ALL AI labels reset');
     return { ok: true, ...result, products: countProducts() };
   });
 
