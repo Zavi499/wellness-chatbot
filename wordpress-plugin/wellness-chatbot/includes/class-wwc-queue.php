@@ -33,6 +33,15 @@ class WWC_Queue {
 		add_filter( 'cron_schedules', array( __CLASS__, 'register_schedule' ) ); // phpcs:ignore WordPress.WP.CronInterval.CronSchedulesInterval
 		add_action( self::CRON_HOOK, array( __CLASS__, 'drain_via_cron' ) );
 		add_action( 'shutdown', array( __CLASS__, 'maybe_flush_on_shutdown' ) );
+
+		// Belt and braces: register_activation_hook() only fires when the plugin
+		// is actually deactivated/reactivated through WordPress. A file-level
+		// update (git deploy, FTP overwrite, a container rebuild) skips that
+		// entirely, which silently leaves this cron job never scheduled — and
+		// with it, any queue larger than SHUTDOWN_MAX permanently stuck with no
+		// visible error. schedule_cron() is a no-op if it's already scheduled,
+		// so checking on every load costs nothing and heals this automatically.
+		self::schedule_cron();
 	}
 
 	/**
@@ -58,6 +67,34 @@ class WWC_Queue {
 
 	public static function unschedule_cron() {
 		wp_clear_scheduled_hook( self::CRON_HOOK );
+	}
+
+	/**
+	 * How many product ids are currently waiting to be pushed — whether
+	 * because the cron drain hasn't run yet, or (see init()'s comment) never
+	 * got scheduled at all. Surfaced on the Settings screen so a stuck queue
+	 * is visible instead of silently sitting there forever.
+	 *
+	 * @return int
+	 */
+	public static function queue_size() {
+		return count( self::get_queue() );
+	}
+
+	/**
+	 * Pushes the ENTIRE current queue right now, regardless of size, in
+	 * batches of BATCH_SIZE — the manual "flush now" action for when an admin
+	 * doesn't want to wait for the next cron firing (or is confirming the
+	 * queue actually drains at all).
+	 *
+	 * @return int How many ids were queued before this call (0 = nothing to do).
+	 */
+	public static function flush_now() {
+		$ids = self::get_queue();
+		foreach ( array_chunk( $ids, self::BATCH_SIZE ) as $chunk ) {
+			self::push_and_remove( $chunk, array( 'blocking' => true, 'timeout' => 30 ) );
+		}
+		return count( $ids );
 	}
 
 	/**

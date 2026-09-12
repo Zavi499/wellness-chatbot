@@ -19,6 +19,7 @@ class WWC_Admin_Settings {
 		add_action( 'admin_post_wwc_save_settings', array( __CLASS__, 'handle_save' ) );
 		add_action( 'admin_post_wwc_export_catalogue', array( __CLASS__, 'handle_export' ) );
 		add_action( 'admin_post_wwc_upload_catalogue', array( __CLASS__, 'handle_upload' ) );
+		add_action( 'admin_post_wwc_flush_queue', array( __CLASS__, 'handle_flush_queue' ) );
 		add_action( 'wp_ajax_wwc_fetch_openai_models', array( __CLASS__, 'ajax_fetch_openai_models' ) );
 	}
 
@@ -278,6 +279,8 @@ class WWC_Admin_Settings {
 		echo '<h2>' . esc_html__( 'Catalogue', 'wellness-chatbot' ) . '</h2>';
 		echo '<p class="description">' . esc_html__( 'The backend never connects to this site to fetch products — day-to-day changes reach it automatically when you save a product. For the first load, or to resync everything at once, export a file here and upload it back.', 'wellness-chatbot' ) . '</p>';
 
+		self::render_queue_status();
+
 		echo '<h3>' . esc_html__( 'Export', 'wellness-chatbot' ) . '</h3>';
 		echo '<p class="description">' . esc_html__( 'Downloads every published product as one file. Reading your own product list like this costs about the same as opening the admin product list once — nothing like the load of hundreds of API calls.', 'wellness-chatbot' ) . '</p>';
 		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
@@ -316,6 +319,61 @@ class WWC_Admin_Settings {
 		echo '</form>';
 
 		echo '<p class="description">' . esc_html__( 'Prefer the command line? SSH in and run: wp wellness-chatbot export — then copy the file to the backend server and run npm run import:prod.', 'wellness-chatbot' ) . '</p>';
+	}
+
+	/**
+	 * A product save normally reaches the backend automatically (see
+	 * WWC_Queue) — this just makes that queue visible instead of it being
+	 * something only a developer reading the database would ever notice, and
+	 * gives a manual way to drain it instead of waiting on cron.
+	 */
+	private static function render_queue_status() {
+		$queued = WWC_Queue::queue_size();
+		if ( $queued <= 0 ) {
+			return;
+		}
+
+		printf(
+			'<div class="notice notice-warning inline"><p>%s</p>',
+			esc_html(
+				sprintf(
+					/* translators: %d: number of products waiting to sync. */
+					_n(
+						'%d product is queued to sync to the backend but has not been pushed yet.',
+						'%d products are queued to sync to the backend but have not been pushed yet.',
+						$queued,
+						'wellness-chatbot'
+					),
+					$queued
+				)
+			)
+		);
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+		wp_nonce_field( 'wwc_flush_queue' );
+		echo '<input type="hidden" name="action" value="wwc_flush_queue" />';
+		printf( '<p><button type="submit" class="button">%s</button></p>', esc_html__( 'Push queued products now', 'wellness-chatbot' ) );
+		echo '</form>';
+		echo '</div>';
+	}
+
+	/**
+	 * Manually drains the whole outbound queue right now instead of waiting
+	 * for the next cron firing — e.g. after confirming the cron schedule
+	 * itself had gone missing (see WWC_Queue::init()).
+	 */
+	public static function handle_flush_queue() {
+		WWC_Admin::verify_post( 'wwc_flush_queue' );
+
+		// A large stuck backlog pushes in several sequential batches (see
+		// flush_now()) — give this request room to finish rather than hitting
+		// a shared-hosting execution time limit partway through.
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 180 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_set_time_limit
+		}
+
+		WWC_Queue::flush_now();
+
+		WWC_Admin::redirect_back( self::PAGE, array( 'wwc_notice' => 'queue_flushed' ) );
 	}
 
 	public static function handle_save() {

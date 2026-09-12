@@ -152,6 +152,7 @@ class WWC_Admin {
 			'relabeled'           => array( 'success', __( 'AI labeling re-run. The new draft is at the top of the queue.', 'wellness-chatbot' ) ),
 			'reset'               => array( 'success', __( 'Unreviewed AI drafts cleared. Verified and partial products were left untouched.', 'wellness-chatbot' ) ),
 			'reset_all'           => array( 'success', __( 'All AI labels cleared. The catalogue is back to never-labeled — use "Run AI labeling now" to relabel it.', 'wellness-chatbot' ) ),
+			'queue_flushed'       => array( 'success', __( 'Queued products pushed to the backend. If any are still shown as queued, check the backend connection.', 'wellness-chatbot' ) ),
 			'failed'              => array( 'error', __( 'That did not work. Check the backend connection and try again.', 'wellness-chatbot' ) ),
 		);
 
