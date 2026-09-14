@@ -38,6 +38,7 @@ that will change weekly ship without a plugin release.
 | Backend pulls the catalogue via WooCommerce REST | Backend has no REST client at all; WordPress pushes | The original design (`products/woocommerce.ts`, since removed) pulled products on every webhook that lacked a full payload, meaning each save cost a second full WordPress + WooCommerce boot to service the pull — untenable on constrained/shared hosting. Traffic is now strictly one-directional: the plugin's queue (`WWC_Queue`) batches full product data on save, and the initial/bulk load is a file (`WWC_Exporter` → `/api/admin/catalogue/import`), not an API pull. `products/normalize.ts` is the one place a `WooRawProduct` becomes a stored row, regardless of which path delivered it. |
 | Rule-based emergency/pharmacist-review escalation to a human (§5.1, §5.2) | Removed entirely | Explicit store-owner decision. `safety/triggers.ts`, the `escalate_to_human` tool, `blockSelling()`, the Escalation Log, and the widget's handoff UI are gone. Sensitive-data detection (§5.4) is unrelated and still runs — see `safety/engine.ts`. |
 | Human approval gates a KB answer (§7) | Direct answers | Explicit store-owner decision. `upsertKb()` derives usability from language completeness, not a manual "Approved" checkbox — see `kb/repository.ts`. |
+| Model IDs fixed at build time | Live overrides, read on every call | The Settings screen can point `chat`/`cheap`/`label` at any model OpenAI's account currently exposes (`GET /api/admin/openai/models` asks OpenAI directly, never a hardcoded list) — see `settings/repository.ts` (`getModelOverrides`/`setModelOverrides`) and `openai/client.ts`. An unset override falls back to the env var, so nothing breaks if the field is left blank. |
 
 ---
 
@@ -103,6 +104,40 @@ category-unresolved case) but is no longer the primary path to `verified` —
 `labelProduct()` writes it directly. `autoVerifyPendingDrafts()` is a
 one-time migration that brought every draft created before direct labeling
 shipped up to the same state; see `backend/src/cli/auto-verify-pending.ts`.
+
+### Resetting labels
+
+Two destructive actions live in the AI Label Review Queue screen's Danger
+Zone, both requiring `confirm: true` server-side so neither can fire from a
+stray request:
+
+- **Clear all unreviewed AI drafts** (`resetUnreviewedLabels()`) — discards
+  stuck/failed drafts (category-unresolved leftovers, or anything left from
+  before direct labeling shipped) back to never-labeled. Never touches a
+  `verified`/`partial` product, by query design.
+- **Reset ALL AI labels and start over** (`resetAllAiLabels()`) — wipes every
+  `ai_generated = 1` product back to never-labeled, verified and partial
+  included, so the whole catalogue can be relabeled from a prompt/model
+  change. By default it still leaves a human-written/verified product
+  (`ai_generated = 0`) alone; a separate, explicit "include human-verified"
+  checkbox on the same form overrides that for a true no-exceptions reset —
+  a deliberate second confirmation, since that content can't be regenerated.
+
+Either way, relabeling afterward is just "Run AI labeling now" on the same
+screen, since a reset product is `unverified` + not `ai_generated` again —
+exactly what `isEligibleForLabeling()` looks for.
+
+### Labeling a product with little or no source text
+
+Labeling never fails on a thin product — the prompt sends `(none)` for a
+missing description/attributes/ingredients, and the model's hard rule is to
+output null rather than invent anything (`labeling/prompts.ts`). It's also
+told to score its own confidence low for thin input. Because labeling still
+auto-verifies unconditionally, such a product ends up "verified" and
+technically recommendable, just with almost nothing in its generated fields
+to actually match a customer's question against — not broken, just
+uninformative. The only real fix is adding real description/attribute text
+in WooCommerce; AI cannot label what isn't there.
 
 ---
 
@@ -204,7 +239,7 @@ it before launch (launch checklist).
 | `class-wwc-cli.php` | `wp wellness-chatbot export` |
 | `class-wwc-widget.php` | Shortcode, launcher, enqueue, bilingual chrome |
 | `class-wwc-brand.php` | Brand ramp (primary `#9322AA`) |
-| `admin/*.php` | The six admin screens (§8) |
+| `admin/*.php` | The five admin screens (§8): Label Review Queue, Knowledge Base, Analytics, Settings, Version History |
 
 Administrators get `wwc_manage_chatbot` on activation but **not**
 `wwc_pharmacist_review` — any admin may still approve any product, but that
@@ -213,12 +248,34 @@ holds the pharmacist role, rather than defaulting true for every admin.
 
 Saving a product no longer makes an HTTP request at all — it only enqueues an
 id (`WWC_Queue`). The queue flushes as one batched push on `shutdown` if it's
-small, or via a five-minute cron drain if a bulk edit left a large backlog, so
-saving a product in wp-admin is never slowed by the chatbot even in aggregate.
-Stock changes and deletions still push immediately — they carry no product
-data, so a single small request costs almost nothing. Re-labeling on save is
-opt-in, because a bulk price edit would otherwise trigger catalogue-wide model
-spend.
+small (≤20 ids), or via a five-minute cron drain if a bulk edit left a larger
+backlog, so saving a product in wp-admin is never slowed by the chatbot even
+in aggregate. Stock changes and deletions still push immediately — they
+carry no product data, so a single small request costs almost nothing.
+Re-labeling on save is opt-in, because a bulk price edit would otherwise
+trigger catalogue-wide model spend.
+
+That cron drain is only useful if it's actually scheduled. `WWC_Queue::init()`
+(which runs on every request) now calls `schedule_cron()` itself — a
+`wp_next_scheduled()`-guarded no-op once it's set — rather than relying only
+on `register_activation_hook()`, which fires on activate/deactivate through
+wp-admin but not on a plain file-level update (git deploy, FTP overwrite, a
+container rebuild). Before this self-heal, a deploy that skipped
+reactivation could leave the cron never scheduled, so any batch larger than
+20 products (a bulk import or bulk edit) sat stuck in the queue permanently
+with no visible error — this is what caused a real production gap between
+the WooCommerce product count and the backend's. `WWC_Queue::queue_size()`
+and a "Push queued products now" button (`flush_now()`) are surfaced as a
+warning banner on the Settings screen whenever the queue is non-empty, so a
+stuck backlog is visible instead of only discoverable by reading the
+database.
+
+Enqueued JS/CSS (`widget.js`, `widget.css`, `admin.js`, `admin.css`) version
+by the file's own mtime (`wwc_asset_version()` in `wellness-chatbot.php`),
+not a hand-maintained constant — a static version string that never changes
+gives a browser or host/CDN cache no signal a bundle was updated, so it can
+keep serving a stale, already-fixed-server-side bundle indefinitely after a
+deploy.
 
 ---
 
@@ -250,10 +307,15 @@ endpoint; the backend never touches cart state.
 cd backend && npm test
 ```
 
-80 tests, no network or API key required:
+85 tests, no network or API key required:
 
 - **Safety** — sensitive data detection (§5.4), the labeling pipeline's
   pharmacist gate (§3.3 step 4, unrelated to the removed escalation pathway).
+- **Labeling** — eligibility for auto-labeling, direct-verification behaviour,
+  and both reset paths: `resetUnreviewedLabels()` (never touches a
+  verified/partial product) and `resetAllAiLabels()`, including its
+  `includeHumanVerified` override actually wiping a human-written product
+  when explicitly asked to.
 - **Recommendation** — eligibility rules, the 100-point weights, diversity
   penalty, top-three selection, no-padding, Arabic card labels.
 - **Conversation** — questionnaire validation, never-ask-twice, branch
@@ -278,13 +340,20 @@ labeling the flagship, and labeling runs once per product. Rate limits are
 per-session and per-IP.
 
 **Monitor**: `/health` reports model IDs, product counts and unconfirmed
-settings. The admin Analytics screen carries the §14 KPIs.
+settings. The admin Analytics screen carries the §14 KPIs. The Settings
+screen's Catalogue section shows a warning with a "Push queued products now"
+button whenever products are waiting to sync but haven't been pushed yet —
+worth a periodic glance, since a WooCommerce product count that doesn't
+match the backend's is the visible symptom of a stuck queue.
 
 ---
 
 ## 11. Launch checklist
 
 - [ ] All Business Settings entered — the Settings screen shows what is missing
+- [ ] WooCommerce's product count matches the backend's (`/health`, or the
+      Settings screen's Catalogue section) — if not, re-run Export → Upload
+      and check for a "products queued" warning
 - [ ] Top-selling products have complete, verified data
 - [ ] All four category questionnaires tested end to end
 - [ ] Top-three recommendations stock-aware and explainable
