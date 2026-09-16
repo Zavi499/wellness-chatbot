@@ -41,7 +41,9 @@ export interface Product {
   permalink: string | null;
   image_url: string | null;
   short_description: string | null;
+  short_description_ar: string | null;
   description: string | null;
+  description_ar: string | null;
   categories: string[];
   tags: string[];
   brand: string | null;

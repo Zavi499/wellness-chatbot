@@ -66,11 +66,14 @@ export interface LabelingInput {
   attributes: string | null;
   ingredientsRaw: string | null;
   brand: string | null;
+  /** A real, human WPML translation — not previously AI-generated output. */
+  existingNameAr?: string | null;
+  existingDescriptionAr?: string | null;
 }
 
 export function labelingUserPrompt(input: LabelingInput): string {
   const label = CATEGORY_LABELS[input.category].en;
-  return [
+  const lines = [
     `Product name: ${input.name}`,
     `Brand: ${input.brand ?? '(not specified)'}`,
     `Category: ${label} (store taxonomy: ${input.categoryNames.join(' > ') || 'n/a'})`,
@@ -78,5 +81,14 @@ export function labelingUserPrompt(input: LabelingInput): string {
     `Description: ${input.description ?? '(none)'}`,
     `Attributes: ${input.attributes ?? '(none)'}`,
     `Full ingredient list (if available): ${input.ingredientsRaw ?? '(none)'}`,
-  ].join('\n');
+  ];
+  if (input.existingNameAr || input.existingDescriptionAr) {
+    lines.push(
+      '',
+      'This product already has a human (not machine) Arabic translation — reuse its exact terminology and phrasing for any Arabic output rather than translating the English text yourself:',
+      `Existing Arabic name: ${input.existingNameAr ?? '(none)'}`,
+      `Existing Arabic description: ${input.existingDescriptionAr ?? '(none)'}`,
+    );
+  }
+  return lines.join('\n');
 }

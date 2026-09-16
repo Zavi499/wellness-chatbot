@@ -101,11 +101,15 @@ class WWC_Queue {
 	 * Adds a product id to the queue. No HTTP happens here — this is a single
 	 * option write, dwarfed by the cost of the product save itself.
 	 *
+	 * Canonicalized defensively (see WWC_Wpml) so any caller — including a
+	 * future one — can't accidentally queue a WPML translation's own id as
+	 * if it were a separate product.
+	 *
 	 * @param int $product_id Product ID.
 	 */
 	public static function enqueue( $product_id ) {
 		$ids   = self::get_queue();
-		$ids[] = (int) $product_id;
+		$ids[] = WWC_Wpml::canonical_id( $product_id );
 		self::save_queue( array_values( array_unique( $ids ) ) );
 	}
 

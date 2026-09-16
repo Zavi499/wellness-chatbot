@@ -21,12 +21,21 @@ import type { Product } from '../types.js';
 export interface WooRawProduct {
   id: number;
   name: string;
+  /**
+   * A real, human WPML translation of `name`/`description`/`short_description`
+   * — populated by `class-wwc-product-payload.php` from the product's Arabic
+   * translation post when one exists. Never AI-invented; that stays a
+   * separate, fallback-only path (see `labeling/pipeline.ts`).
+   */
+  name_ar?: string | null;
   sku?: string;
   permalink?: string;
   status?: string;
   catalog_visibility?: string;
   description?: string;
+  description_ar?: string | null;
   short_description?: string;
+  short_description_ar?: string | null;
   price?: string;
   regular_price?: string;
   sale_price?: string;
@@ -97,10 +106,13 @@ export function normalizeWooProduct(raw: WooRawProduct): Parameters<typeof upser
     product_id: raw.id,
     sku: raw.sku || null,
     name: raw.name ?? '',
+    name_ar: raw.name_ar || null,
     permalink: raw.permalink ?? null,
     image_url: raw.images?.[0]?.src ?? null,
     short_description: stripHtml(raw.short_description),
+    short_description_ar: stripHtml(raw.short_description_ar),
     description: stripHtml(raw.description),
+    description_ar: stripHtml(raw.description_ar),
     categories: (raw.categories ?? []).map((c) => c.name),
     tags: (raw.tags ?? []).map((t) => t.name),
     brand: extractBrand(raw),

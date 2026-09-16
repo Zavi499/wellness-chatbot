@@ -69,6 +69,8 @@ async function callLabelingModel(
           attributes: product.tags.length ? product.tags.join(', ') : null,
           ingredientsRaw: product.full_ingredients,
           brand: product.brand,
+          existingNameAr: product.name_ar,
+          existingDescriptionAr: product.description_ar,
         }),
       },
     ],
@@ -101,11 +103,23 @@ async function callLabelingModel(
  * distinguishable from a human approval, and `verified_by_pharmacist` is
  * never set by this path — that field only ever means an actual pharmacist
  * reviewer did it, which didn't happen here.
+ *
+ * `existingNameAr` is the product's current `name_ar` — when it's already
+ * set, that only ever means a real WPML translation exists (`name_ar` is
+ * never written by anything else on the sync side, see
+ * `products/repository.ts`), so `name_ar` is left out of the patch entirely
+ * rather than overwritten with the model's own guess. `updateWwcFields()`
+ * never touches a column that's absent from the patch object.
  */
-export function draftToPatch(draft: LabelDraft, confidence: number, requiresReview: boolean) {
+export function draftToPatch(
+  draft: LabelDraft,
+  confidence: number,
+  requiresReview: boolean,
+  existingNameAr: string | null = null,
+) {
   const empty = { en: [] as string[], ar: [] as string[] };
   return {
-    name_ar: draft.name_ar ?? null,
+    ...(existingNameAr ? {} : { name_ar: draft.name_ar ?? null }),
     concern_primary: draft.concern_primary ?? empty,
     concern_secondary: draft.concern_secondary ?? empty,
     suitable_types: draft.suitable_types ?? empty,
@@ -136,12 +150,18 @@ export function draftToPatch(draft: LabelDraft, confidence: number, requiresRevi
 }
 
 /**
- * The fields a reset should clear — exactly the inverse of `draftToPatch()`.
- * Kept as its own list rather than derived, so a future field added to one
- * doesn't silently get missed by the other; the tests below catch drift.
+ * The fields a reset should clear — exactly the inverse of `draftToPatch()`,
+ * with one deliberate exception: `name_ar`. The database has no record of
+ * whether a product's current `name_ar` came from a real WPML translation
+ * or an AI guess (both write the same column), so a reset — which must
+ * never destroy a real translation — leaves it alone entirely rather than
+ * risk wiping one. The cost is that an AI-guessed name (only possible for a
+ * product with no WPML translation) can outlive a reset; re-running AI
+ * labeling won't regenerate it either, since a non-null `name_ar` reads as
+ * "already have something real" (see `draftToPatch()`) — an accepted,
+ * narrow tradeoff in favour of never touching real translated content.
  */
 const RESET_PATCH = {
-  name_ar: null,
   concern_primary: { en: [], ar: [] },
   concern_secondary: { en: [], ar: [] },
   suitable_types: { en: [], ar: [] },
@@ -211,7 +231,7 @@ export async function labelProduct(productId: number): Promise<LabelRunResult> {
     modelFlaggedSensitive: draft.mentions_sensitive_topic === true,
   });
 
-  updateWwcFields(productId, draftToPatch(draft, confidence, gate.requiresPharmacistReview));
+  updateWwcFields(productId, draftToPatch(draft, confidence, gate.requiresPharmacistReview, product.name_ar));
 
   const draftId = insertDraft(productId, category, draft, confidence, model, true);
 

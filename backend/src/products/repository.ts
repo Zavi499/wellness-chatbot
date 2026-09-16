@@ -36,7 +36,9 @@ export function rowToProduct(row: Row): Product {
     permalink: (row.permalink as string) ?? null,
     image_url: (row.image_url as string) ?? null,
     short_description: (row.short_description as string) ?? null,
+    short_description_ar: (row.short_description_ar as string) ?? null,
     description: (row.description as string) ?? null,
+    description_ar: (row.description_ar as string) ?? null,
     categories: parseJson<string[]>(row.categories_json, []),
     tags: parseJson<string[]>(row.tags_json, []),
     brand: (row.brand as string) ?? null,
@@ -89,21 +91,29 @@ export function rowToProduct(row: Row): Product {
 
 const UPSERT = `
 INSERT INTO products (
-  product_id, sku, name, name_ar, permalink, image_url, short_description, description,
-  categories_json, tags_json, brand, price, regular_price, sale_price, currency, size,
-  stock_status, rating_average, rating_count, updated_at, synced_at
+  product_id, sku, name, name_ar, permalink, image_url, short_description, short_description_ar,
+  description, description_ar, categories_json, tags_json, brand, price, regular_price, sale_price,
+  currency, size, stock_status, rating_average, rating_count, updated_at, synced_at
 ) VALUES (
   ?, ?, ?, ?, ?, ?, ?, ?,
   ?, ?, ?, ?, ?, ?, ?, ?,
-  ?, ?, ?, ?, ?
+  ?, ?, ?, ?, ?, ?, ?
 )
 ON CONFLICT(product_id) DO UPDATE SET
   sku = excluded.sku,
   name = excluded.name,
+  -- A WPML translation (see class-wwc-product-payload.php) is the only
+  -- source for these three, and a sync that carries no translation (an
+  -- untranslated product, or a plain non-WPML store) must never blank out a
+  -- real value that's already there — so these fall back to whatever is
+  -- already stored instead of blindly overwriting like every other column.
+  name_ar = COALESCE(excluded.name_ar, products.name_ar),
   permalink = excluded.permalink,
   image_url = excluded.image_url,
   short_description = excluded.short_description,
+  short_description_ar = COALESCE(excluded.short_description_ar, products.short_description_ar),
   description = excluded.description,
+  description_ar = COALESCE(excluded.description_ar, products.description_ar),
   categories_json = excluded.categories_json,
   tags_json = excluded.tags_json,
   brand = excluded.brand,
@@ -123,6 +133,12 @@ ON CONFLICT(product_id) DO UPDATE SET
  * Writes the WooCommerce-owned half of a product. Deliberately does NOT touch
  * any `_wwc_*` column: a re-sync from the store must never silently undo a
  * pharmacist's verification (spec §3.1).
+ *
+ * `name_ar` / `description_ar` / `short_description_ar` are the one
+ * exception to "WooCommerce-owned columns always overwrite": they only ever
+ * come from a real WPML translation (never AI-invented — see
+ * `labeling/pipeline.ts`), so a sync with nothing to offer here must not
+ * erase one that's already stored (see the UPSERT's COALESCE above).
  */
 export function upsertWooFields(
   p: Pick<
@@ -145,7 +161,8 @@ export function upsertWooFields(
     | 'stock_status'
     | 'rating_average'
     | 'rating_count'
-  >,
+  > &
+    Partial<Pick<Product, 'name_ar' | 'description_ar' | 'short_description_ar'>>,
   conn: DatabaseSync = db(),
 ): void {
   conn
@@ -154,11 +171,13 @@ export function upsertWooFields(
       p.product_id,
       p.sku,
       p.name,
-      null,
+      p.name_ar ?? null,
       p.permalink,
       p.image_url,
       p.short_description,
+      p.short_description_ar ?? null,
       p.description,
+      p.description_ar ?? null,
       toJson(p.categories),
       toJson(p.tags),
       p.brand,

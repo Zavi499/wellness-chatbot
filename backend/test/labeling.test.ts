@@ -79,6 +79,20 @@ describe('draftToPatch (direct labeling, no review gate)', () => {
     assert.equal(draftToPatch({}, 0.8, true).requires_pharmacist_review, true);
     assert.equal(draftToPatch({}, 0.8, false).requires_pharmacist_review, false);
   });
+
+  test('fills name_ar from the draft when the product has no existing translation', () => {
+    const patch = draftToPatch({ name_ar: 'اسم مولّد بالذكاء الاصطناعي' }, 0.8, false, null);
+    assert.equal(patch.name_ar, 'اسم مولّد بالذكاء الاصطناعي');
+  });
+
+  test('leaves name_ar out of the patch entirely when a real translation already exists', () => {
+    const patch = draftToPatch({ name_ar: 'اسم اخترعه الذكاء الاصطناعي' }, 0.8, false, 'اسم حقيقي من WPML');
+    assert.equal(
+      'name_ar' in patch,
+      false,
+      'must not overwrite a real WPML translation with the model\'s own guess',
+    );
+  });
 });
 
 function seedProduct(

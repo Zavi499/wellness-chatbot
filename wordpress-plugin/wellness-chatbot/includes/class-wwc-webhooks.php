@@ -27,14 +27,19 @@ class WWC_Webhooks {
 	}
 
 	/**
-	 * @param int $product_id Product ID.
+	 * @param int $product_id Product ID — may be a WPML translation's post
+	 *                        id, in which case this operates on its
+	 *                        canonical (English) sibling instead, so editing
+	 *                        either language ends up pushing the same
+	 *                        product.
 	 */
 	public static function on_product_saved( $product_id ) {
 		if ( ! WWC_Settings::is_connected() ) {
 			return;
 		}
 
-		$product = wc_get_product( $product_id );
+		$product_id = WWC_Wpml::canonical_id( $product_id );
+		$product    = wc_get_product( $product_id );
 		if ( ! $product ) {
 			return;
 		}
@@ -71,6 +76,8 @@ class WWC_Webhooks {
 			return;
 		}
 
+		$product_id = WWC_Wpml::canonical_id( $product_id );
+
 		WWC_Backend_Client::notify(
 			self::ENDPOINT,
 			array(
@@ -82,7 +89,9 @@ class WWC_Webhooks {
 	}
 
 	/**
-	 * @param int     $post_id Post ID.
+	 * @param int     $post_id Post ID — the WPML translation's id if a
+	 *                         translation (not the original) is what's being
+	 *                         removed.
 	 * @param WP_Post $post    Post object.
 	 */
 	public static function on_product_deleted( $post_id, $post = null ) {
@@ -91,6 +100,15 @@ class WWC_Webhooks {
 		}
 		$type = $post instanceof WP_Post ? $post->post_type : get_post_type( $post_id );
 		if ( 'product' !== $type ) {
+			return;
+		}
+
+		if ( ! WWC_Wpml::is_canonical( $post_id ) ) {
+			// Only a translation (e.g. the Arabic post) is being removed —
+			// the product itself still exists. Re-sync the canonical product
+			// so the next flush drops the now-gone translation text, rather
+			// than deleting the whole product from the backend.
+			WWC_Queue::enqueue( WWC_Wpml::canonical_id( $post_id ) );
 			return;
 		}
 

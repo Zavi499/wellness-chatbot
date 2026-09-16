@@ -66,19 +66,37 @@ class WWC_Exporter {
 		do {
 			$batch = wc_get_products(
 				array(
-					'status'  => 'publish',
-					'limit'   => self::BATCH_SIZE,
-					'page'    => $page,
-					'orderby' => 'ID',
-					'order'   => 'ASC',
-					'return'  => 'objects',
+					'status'           => 'publish',
+					'limit'            => self::BATCH_SIZE,
+					'page'             => $page,
+					'orderby'          => 'ID',
+					'order'            => 'ASC',
+					'return'           => 'objects',
+					// Without this, a WPML site's active language context
+					// (which differs between an admin session, WP-CLI, and
+					// cron) silently decides which language's posts this
+					// query even sees. Suppressing it makes the result
+					// deterministic — every product post in every language —
+					// so the canonical-only filter below is what controls
+					// what actually gets exported, not ambient query state.
+					'suppress_filters' => true,
 				)
 			);
 
 			foreach ( $batch as $product ) {
-				if ( $product instanceof WC_Product ) {
-					$products[] = WWC_Product_Payload::build( $product );
+				if ( ! $product instanceof WC_Product ) {
+					continue;
 				}
+				// A WPML translation post (e.g. the Arabic copy) is skipped
+				// here — its canonical (English) sibling is exported instead
+				// and WWC_Product_Payload::build() attaches this
+				// translation's text to that one payload. Without this, a
+				// translated catalogue would export twice as many "products"
+				// as actually exist.
+				if ( ! WWC_Wpml::is_canonical( $product->get_id() ) ) {
+					continue;
+				}
+				$products[] = WWC_Product_Payload::build( $product );
 			}
 
 			++$page;

@@ -17,29 +17,57 @@ defined( 'ABSPATH' ) || exit;
 class WWC_Product_Payload {
 
 	/**
-	 * @param WC_Product $product Product.
+	 * @param WC_Product $product Product — may be either the canonical
+	 *                            (English) post or one of its WPML
+	 *                            translations; either way the payload built
+	 *                            is always keyed by, and built from, the
+	 *                            canonical post.
 	 * @return array
 	 */
 	public static function build( WC_Product $product ) {
+		$canonical_id = WWC_Wpml::canonical_id( $product->get_id() );
+		if ( $canonical_id !== $product->get_id() ) {
+			$canonical = wc_get_product( $canonical_id );
+			if ( $canonical instanceof WC_Product ) {
+				$product = $canonical;
+			}
+		}
+
+		$name_ar        = null;
+		$description_ar = null;
+		$short_ar       = null;
+		$ar_id          = WWC_Wpml::translation_id( $canonical_id, 'ar' );
+		if ( $ar_id ) {
+			$ar_product = wc_get_product( $ar_id );
+			if ( $ar_product instanceof WC_Product ) {
+				$name_ar        = $ar_product->get_name();
+				$description_ar = (string) $ar_product->get_description();
+				$short_ar       = (string) $ar_product->get_short_description();
+			}
+		}
+
 		return array(
-			'id'                 => $product->get_id(),
-			'name'               => $product->get_name(),
-			'sku'                => (string) $product->get_sku(),
-			'permalink'          => $product->get_permalink(),
-			'status'             => $product->get_status(),
-			'catalog_visibility' => $product->get_catalog_visibility(),
-			'description'        => (string) $product->get_description(),
-			'short_description'  => (string) $product->get_short_description(),
-			'price'              => (string) $product->get_price(),
-			'regular_price'      => (string) $product->get_regular_price(),
-			'sale_price'         => (string) $product->get_sale_price(),
-			'stock_status'       => $product->get_stock_status(),
-			'average_rating'     => (string) $product->get_average_rating(),
-			'rating_count'       => (int) $product->get_rating_count(),
-			'categories'         => self::terms( $product, 'product_cat' ),
-			'tags'               => self::terms( $product, 'product_tag' ),
-			'images'             => self::images( $product ),
-			'attributes'         => self::attributes( $product ),
+			'id'                   => $canonical_id,
+			'name'                 => $product->get_name(),
+			'name_ar'              => $name_ar,
+			'sku'                  => (string) $product->get_sku(),
+			'permalink'            => $product->get_permalink(),
+			'status'               => $product->get_status(),
+			'catalog_visibility'   => $product->get_catalog_visibility(),
+			'description'          => (string) $product->get_description(),
+			'description_ar'       => $description_ar,
+			'short_description'    => (string) $product->get_short_description(),
+			'short_description_ar' => $short_ar,
+			'price'                => (string) $product->get_price(),
+			'regular_price'        => (string) $product->get_regular_price(),
+			'sale_price'           => (string) $product->get_sale_price(),
+			'stock_status'         => $product->get_stock_status(),
+			'average_rating'       => (string) $product->get_average_rating(),
+			'rating_count'         => (int) $product->get_rating_count(),
+			'categories'           => self::terms( $product, 'product_cat' ),
+			'tags'                 => self::terms( $product, 'product_tag' ),
+			'images'               => self::images( $product ),
+			'attributes'           => self::attributes( $product ),
 		);
 	}
 
