@@ -43,7 +43,11 @@ export function renderRecommendations(
 function renderCard(item: RecommendationItem, strings: Strings, callbacks: CardCallbacks): HTMLElement {
   const card = el('article', { class: 'wwc-card' });
 
-  card.append(el('span', { class: 'wwc-card-label', text: item.label }));
+  // Search-result cards carry no slot badge ("Best Overall Match" etc.) —
+  // rendering an empty one would still paint a stray pill.
+  if (item.label) {
+    card.append(el('span', { class: 'wwc-card-label', text: item.label }));
+  }
 
   const head = el('div', { class: 'wwc-card-head' });
   if (item.image_url) {

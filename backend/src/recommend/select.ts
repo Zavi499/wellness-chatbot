@@ -24,6 +24,13 @@ const DISCLAIMER: Record<Language, string> = {
   ar: 'بناءً على إجاباتك، هذه هي أفضل الخيارات المتوفرة حالياً في متجرنا.',
 };
 
+/** Search results aren't scored against a profile, so they can't claim to be
+ *  "the best matches based on your answers" the way a recommendation set does. */
+const SEARCH_DISCLAIMER: Record<Language, string> = {
+  en: 'These are the matching products in our current catalogue.',
+  ar: 'هذه هي المنتجات المطابقة المتوفرة حالياً في متجرنا.',
+};
+
 const SHORTFALL: Record<Language, string> = {
   en: "That's everything in our catalogue that genuinely fits what you described — I'd rather show you fewer good matches than pad the list.",
   ar: 'هذه كل الخيارات التي تناسب فعلاً ما وصفته — أفضّل أن أعرض عليك خيارات أقل لكنها مناسبة بدلاً من إضافة خيارات غير ملائمة.',
@@ -120,41 +127,73 @@ function localized(bilingual: { en: string | null; ar: string | null }, language
   return language === 'ar' ? (bilingual.ar ?? bilingual.en) : (bilingual.en ?? bilingual.ar);
 }
 
+/**
+ * One product → one card. The single place a `Product` becomes the shape the
+ * widget renders, so a scored recommendation and a plain search result can
+ * never drift into looking like two different kinds of thing — the reason
+ * search results used to come back as prose the model wrote by hand.
+ */
+function toCard(
+  p: Product,
+  language: Language,
+  opts: { label: string; why: string[]; actions: string[] },
+): RecommendationItem {
+  return {
+    product_id: p.product_id,
+    label: opts.label,
+    name: language === 'ar' ? pick(p.name_ar, p.name) : p.name,
+    image_url: p.image_url,
+    permalink: p.permalink,
+    price: formatPrice(p),
+    size: p.size,
+    in_stock: p.stock_status === 'instock',
+    why_it_suits_you: opts.why,
+    best_for:
+      localized(
+        { en: p.concern_primary.en.join(', ') || null, ar: p.concern_primary.ar.join(', ') || null },
+        language,
+      ) ?? (language === 'ar' ? 'العناية اليومية' : 'Everyday care'),
+    what_to_know:
+      localized(p.warnings, language) ??
+      localized(p.not_ideal_for, language) ??
+      (language === 'ar'
+        ? 'جرّبيه على منطقة صغيرة أولاً إذا كانت بشرتك حساسة.'
+        : 'Patch test first if your skin reacts easily.'),
+    how_to_use:
+      localized(p.how_to_use, language) ??
+      (language === 'ar' ? 'اتبع التعليمات المدوّنة على العبوة.' : 'Follow the directions on the pack.'),
+    actions: opts.actions,
+  };
+}
+
+/**
+ * Cards for products the customer found by searching or naming a brand,
+ * rather than through the questionnaire. No slot badge and no "why this"
+ * reasons — there is no scored profile behind them — but the same card, with
+ * the same View product / Add to cart actions. `replace` is deliberately
+ * absent: there is no ranked set to swap a pick out of.
+ */
+export function toProductCards(products: Product[], language: Language): RecommendationSet {
+  return {
+    type: 'recommendation_set',
+    items: products.map((p) =>
+      toCard(p, language, { label: '', why: [], actions: ['view_product', 'add_to_cart'] }),
+    ),
+    disclaimer: SEARCH_DISCLAIMER[language],
+  };
+}
+
 export function toRecommendationSet(
   result: SelectionResult,
   language: Language,
   opts: { includeScores?: boolean } = {},
 ): RecommendationSet {
   const items: RecommendationItem[] = result.picks.map(({ slot, scored }) => {
-    const p = scored.product;
-    const whatToKnow =
-      localized(p.warnings, language) ??
-      localized(p.not_ideal_for, language) ??
-      (language === 'ar'
-        ? 'جرّبيه على منطقة صغيرة أولاً إذا كانت بشرتك حساسة.'
-        : 'Patch test first if your skin reacts easily.');
-
-    const item: RecommendationItem = {
-      product_id: p.product_id,
+    const item = toCard(scored.product, language, {
       label: LABELS[slot][language],
-      name: language === 'ar' ? pick(p.name_ar, p.name) : p.name,
-      image_url: p.image_url,
-      permalink: p.permalink,
-      price: formatPrice(p),
-      size: p.size,
-      in_stock: p.stock_status === 'instock',
-      why_it_suits_you: scored.reasons,
-      best_for:
-        localized(
-          { en: p.concern_primary.en.join(', ') || null, ar: p.concern_primary.ar.join(', ') || null },
-          language,
-        ) ?? (language === 'ar' ? 'العناية اليومية' : 'Everyday care'),
-      what_to_know: whatToKnow,
-      how_to_use:
-        localized(p.how_to_use, language) ??
-        (language === 'ar' ? 'اتبع التعليمات المدوّنة على العبوة.' : 'Follow the directions on the pack.'),
+      why: scored.reasons,
       actions: ['view_product', 'add_to_cart', 'compare', 'replace'],
-    };
+    });
 
     if (opts.includeScores) {
       item.score = scored.score;

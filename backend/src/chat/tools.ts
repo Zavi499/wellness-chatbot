@@ -9,7 +9,7 @@ import { getSettings } from '../settings/repository.js';
 import { searchKb, answerIn, KB_FALLBACK } from '../kb/repository.js';
 import { searchProducts } from '../search/embeddings.js';
 import { buildProfile } from '../recommend/profile.js';
-import { selectTopThree, toRecommendationSet } from '../recommend/select.js';
+import { selectTopThree, toRecommendationSet, toProductCards } from '../recommend/select.js';
 import { isProductCategory, type ProductCategory } from '../products/category.js';
 import { recordAnswer } from './session.js';
 import { logEvent } from '../analytics/audit.js';
@@ -241,8 +241,13 @@ async function runSearchProducts(args: { query?: string }, ctx: ToolContext): Pr
       note:
         visible.length === 0
           ? 'Nothing verified matched. Say so plainly and offer to connect the customer with the team.'
-          : 'Only these products may be named. Do not mention any product not in this list.',
+          : // Same contract as get_recommendations: the customer is already
+            // looking at real cards with price, stock and an Add to cart
+            // button, so re-typing those details as prose duplicates the card
+            // badly and loses the button.
+            'Only these products may be named. Do not mention any product not in this list. The cards are already shown to the customer — introduce them in a sentence, do not restate each product\'s name, price or details in your reply.',
     }),
+    recommendations: visible.length ? toProductCards(visible.map((h) => h.product), ctx.language) : undefined,
   };
 }
 

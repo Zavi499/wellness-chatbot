@@ -5,7 +5,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { checkEligibility, filterEligible } from '../src/recommend/eligibility.js';
 import { scoreProduct, WEIGHTS } from '../src/recommend/scoring.js';
-import { selectTopThree, toRecommendationSet } from '../src/recommend/select.js';
+import { selectTopThree, toRecommendationSet, toProductCards } from '../src/recommend/select.js';
 import { buildProfile } from '../src/recommend/profile.js';
 import type { Product } from '../src/types.js';
 
@@ -132,6 +132,41 @@ describe('general category eligibility', () => {
       vitaminsProfile,
     );
     assert.equal(result.reasons.includes('medicine'), false);
+  });
+});
+
+// Search results used to come back as raw JSON that the model then narrated
+// as prose — same product, but no image, no price chip, and no Add to cart
+// button. Both paths now build the same card via the same function.
+describe('toProductCards (search results)', () => {
+  test('builds a renderable card per product', () => {
+    const set = toProductCards([product({ name: 'NOVACLEAR Whitening Eye Cream 15ml' })], 'en');
+    assert.equal(set.type, 'recommendation_set');
+    assert.equal(set.items.length, 1);
+    assert.equal(set.items[0]!.name, 'NOVACLEAR Whitening Eye Cream 15ml');
+  });
+
+  test('every card can be added to cart and opened', () => {
+    const [item] = toProductCards([product()], 'en').items;
+    assert.ok(item!.actions.includes('add_to_cart'));
+    assert.ok(item!.actions.includes('view_product'));
+  });
+
+  test('carries no slot badge and no scored reasons', () => {
+    const [item] = toProductCards([product()], 'en').items;
+    assert.equal(item!.label, '', 'no "Best Overall Match" claim without a scored profile');
+    assert.deepEqual(item!.why_it_suits_you, []);
+  });
+
+  test('offers no "replace" — there is no ranked set to swap within', () => {
+    const [item] = toProductCards([product()], 'en').items;
+    assert.equal(item!.actions.includes('replace'), false);
+  });
+
+  test('uses the Arabic name and disclaimer when the session is Arabic', () => {
+    const set = toProductCards([product({ name: 'Eye Cream', name_ar: 'كريم العين' })], 'ar');
+    assert.equal(set.items[0]!.name, 'كريم العين');
+    assert.match(set.disclaimer, /[؀-ۿ]/, 'disclaimer is Arabic too');
   });
 });
 
