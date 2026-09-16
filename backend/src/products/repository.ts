@@ -4,6 +4,7 @@
  */
 import type { DatabaseSync } from 'node:sqlite';
 import { db, parseJson, toJson, nowIso } from '../db/index.js';
+import { config } from '../config.js';
 import type {
   AgeSuitability,
   Bilingual,
@@ -301,7 +302,13 @@ export function setStockStatus(
 
 export function countProducts(
   conn: DatabaseSync = db(),
-): { total: number; verified: number; queued: number; ai_labeled: number } {
+): {
+  total: number;
+  verified: number;
+  queued: number;
+  ai_labeled: number;
+  low_confidence: number;
+} {
   const total = Number(
     (conn.prepare('SELECT COUNT(*) AS c FROM products').get() as Row).c ?? 0,
   );
@@ -318,5 +325,19 @@ export function countProducts(
   const aiLabeled = Number(
     (conn.prepare(`SELECT COUNT(*) AS c FROM products WHERE ai_generated = 1`).get() as Row).c ?? 0,
   );
-  return { total, verified, queued, ai_labeled: aiLabeled };
+  // Labeled and nominally "verified", but scored too low by the model itself
+  // to be recommended (see the confidence floor in recommend/eligibility.ts).
+  // Surfaced so this filter is visible and tunable rather than silently
+  // shrinking the recommendable catalogue.
+  const lowConfidence = Number(
+    (
+      conn
+        .prepare(
+          `SELECT COUNT(*) AS c FROM products
+           WHERE ai_generated = 1 AND ai_confidence IS NOT NULL AND ai_confidence < ?`,
+        )
+        .get(config.recommendations.minConfidence) as Row
+    ).c ?? 0,
+  );
+  return { total, verified, queued, ai_labeled: aiLabeled, low_confidence: lowConfidence };
 }

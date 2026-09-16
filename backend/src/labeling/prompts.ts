@@ -51,6 +51,25 @@ pregnancy, breastfeeding, children or chronic conditions. Leave those fields
 null for a pharmacist to complete rather than modelling a guess. Copy serving
 size and key amounts EXACTLY as printed in the source text, or null if they are
 not printed. Always set mentions_sensitive_topic to true for this category.`,
+
+  general: `This product did not match any of the four consultative shelves —
+it is something else the pharmacy stocks: makeup, baby care, oral care, first
+aid, a device, an accessory, a household item, or a medicine.
+
+Describe it plainly and factually from the source text. Do not force it into
+skincare language: "concern" here means whatever need the product serves, not
+a skin condition.
+
+ADDITIONAL HARD RULE — medicines. If this is a medicine (an antibiotic, a
+painkiller, anything prescription-only, anything with an active
+pharmaceutical ingredient and a strength like "500mg" or "1g" in its name),
+then: set mentions_sensitive_topic to true, and leave concern_primary,
+concern_secondary and suitable_types EMPTY. Do not describe what condition it
+treats, who should take it, or when to use it, even if the source text says
+so. A medicine may be listed and found by name, but nothing here may become
+the basis of a recommendation to take it — that requires a pharmacist, not a
+catalogue. Record only what is on the box: name, form, strength, and any
+warnings printed in the source.`,
 };
 
 export function labelingSystemPrompt(category: ProductCategory): string {

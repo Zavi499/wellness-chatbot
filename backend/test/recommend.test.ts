@@ -75,6 +75,84 @@ const profile = buildProfile('face', {
   budget: 'mid',
 });
 
+// Everything that isn't one of the four consultative shelves resolves to
+// `general` — makeup, baby, oral care, devices — so it can be described,
+// searched and recommended instead of stranded as "category unresolved".
+const generalProfile = buildProfile('general', {
+  product_type: 'makeup',
+  concern_primary: 'daily_use',
+  budget: 'mid',
+});
+
+function generalProduct(overrides: Partial<Product> = {}): Product {
+  return product({
+    categories: ['Makeup'],
+    concern_primary: { en: ['lip colour'], ar: [] },
+    suitable_types: { en: ['daily use'], ar: [] },
+    routine_step: null,
+    ...overrides,
+  });
+}
+
+describe('general category eligibility', () => {
+  test('a general-category product is recommendable through the general flow', () => {
+    const result = checkEligibility(generalProduct({ name: 'KORFF Lip Pencil 1.08g' }), generalProfile);
+    assert.equal(result.eligible, true, 'a lip pencil must not be stranded any more');
+  });
+
+  test('a medicine in the general bucket is never recommendable', () => {
+    const result = checkEligibility(generalProduct({ name: 'AUGMENTIN 1G 14 TAB' }), generalProfile);
+    assert.equal(result.eligible, false);
+    assert.ok(
+      result.reasons.includes('medicine'),
+      'strength + dosage form in the name marks it a medicine',
+    );
+  });
+
+  test('a medicine identified by its WooCommerce category is also excluded', () => {
+    const result = checkEligibility(
+      generalProduct({ name: 'Some Brand Syrup', categories: ['Prescription Medicines'] }),
+      generalProfile,
+    );
+    assert.equal(result.eligible, false);
+    assert.ok(result.reasons.includes('medicine'));
+  });
+
+  test('a supplement with a strength in its name stays recommendable on the vitamins shelf', () => {
+    // The medicine rule is scoped to `general` precisely so this case — which
+    // matches the same strength+form pattern — is unaffected.
+    const vitaminsProfile = buildProfile('vitamins', { concern_primary: 'immunity', budget: 'mid' });
+    const result = checkEligibility(
+      product({
+        name: 'Vitamin C 500mg Tablets',
+        categories: ['Vitamins & Supplements'],
+        concern_primary: { en: ['immunity'], ar: [] },
+        suitable_types: { en: [], ar: [] },
+      }),
+      vitaminsProfile,
+    );
+    assert.equal(result.reasons.includes('medicine'), false);
+  });
+});
+
+describe('confidence floor', () => {
+  test('rejects an AI-labeled product whose self-reported confidence is too low', () => {
+    const result = checkEligibility(product({ ai_generated: true, ai_confidence: 0.1 }), profile);
+    assert.equal(result.eligible, false);
+    assert.ok(result.reasons.includes('low_confidence'));
+  });
+
+  test('accepts an AI-labeled product above the floor', () => {
+    const result = checkEligibility(product({ ai_generated: true, ai_confidence: 0.9 }), profile);
+    assert.equal(result.eligible, true);
+  });
+
+  test('a human-verified product is exempt — it carries no AI confidence', () => {
+    const result = checkEligibility(product({ ai_generated: false, ai_confidence: null }), profile);
+    assert.equal(result.eligible, true);
+  });
+});
+
 describe('eligibility (§3.4)', () => {
   test('accepts a verified, in-stock, matching product', () => {
     assert.equal(checkEligibility(product(), profile).eligible, true);

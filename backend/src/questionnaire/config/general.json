@@ -1,0 +1,60 @@
+{
+  "id": "general",
+  "title_en": "Something else",
+  "title_ar": "شيء آخر",
+  "questions": [
+    {
+      "key": "product_type",
+      "text_en": "What kind of product are you looking for?",
+      "text_ar": "ما نوع المنتج الذي تبحث عنه؟",
+      "type": "single",
+      "options": [
+        { "value": "makeup", "label_en": "Makeup / cosmetics", "label_ar": "مكياج ومستحضرات تجميل" },
+        { "value": "baby", "label_en": "Baby & mother care", "label_ar": "العناية بالطفل والأم" },
+        { "value": "oral", "label_en": "Oral & dental care", "label_ar": "العناية بالفم والأسنان" },
+        { "value": "first_aid", "label_en": "First aid & home health", "label_ar": "الإسعافات الأولية والصحة المنزلية" },
+        { "value": "fragrance", "label_en": "Fragrance", "label_ar": "العطور" },
+        { "value": "other", "label_en": "Something else", "label_ar": "شيء آخر" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "concern_primary",
+      "text_en": "What do you need it for?",
+      "text_ar": "لماذا تحتاجه؟",
+      "type": "single",
+      "options": [
+        { "value": "daily_use", "label_en": "Everyday use", "label_ar": "استخدام يومي" },
+        { "value": "specific_problem", "label_en": "A specific problem", "label_ar": "مشكلة معيّنة" },
+        { "value": "gift", "label_en": "A gift", "label_ar": "هدية" },
+        { "value": "travel", "label_en": "Travel / on the go", "label_ar": "السفر والتنقل" },
+        { "value": "restock", "label_en": "Replacing something I already use", "label_ar": "بديل لمنتج أستخدمه" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "sensitivity_level",
+      "text_en": "Any sensitivity or allergy I should keep in mind?",
+      "text_ar": "هل هناك حساسية يجب أخذها بالاعتبار؟",
+      "type": "single",
+      "options": [
+        { "value": "very", "label_en": "Yes, very sensitive", "label_ar": "نعم، حساسية شديدة" },
+        { "value": "somewhat", "label_en": "Somewhat", "label_ar": "متوسطة" },
+        { "value": "not", "label_en": "No", "label_ar": "لا" },
+        { "value": "not_sure", "label_en": "I'm not sure", "label_ar": "لست متأكداً" }
+      ]
+    },
+    {
+      "key": "budget",
+      "text_en": "What budget works for you?",
+      "text_ar": "ما الميزانية المناسبة لك؟",
+      "type": "single",
+      "options": [
+        { "value": "low", "label_en": "Best value", "label_ar": "الأوفر" },
+        { "value": "mid", "label_en": "Mid-range", "label_ar": "متوسطة" },
+        { "value": "high", "label_en": "Premium", "label_ar": "فاخرة" },
+        { "value": "any", "label_en": "Show me anything suitable", "label_ar": "أرني أي خيار مناسب" }
+      ]
+    }
+  ]
+}

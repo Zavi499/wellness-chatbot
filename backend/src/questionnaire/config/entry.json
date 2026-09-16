@@ -13,6 +13,7 @@
         { "value": "body", "label_en": "Body care", "label_ar": "العناية بالجسم" },
         { "value": "hair", "label_en": "Hair care", "label_ar": "العناية بالشعر" },
         { "value": "vitamins", "label_en": "Vitamins & wellness", "label_ar": "الفيتامينات والصحة" },
+        { "value": "general", "label_en": "Something else", "label_ar": "شيء آخر" },
         { "value": "routine", "label_en": "Build a complete routine", "label_ar": "بناء روتين متكامل" },
         { "value": "compare", "label_en": "Compare products", "label_ar": "مقارنة المنتجات" }
       ]

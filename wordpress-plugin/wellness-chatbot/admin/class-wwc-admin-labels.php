@@ -135,8 +135,12 @@ class WWC_Admin_Labels {
 
 		echo '<div class="wwc-run-labeling-controls">';
 		printf(
-			'<label>%s <input type="number" id="wwc-label-limit" value="25" min="1" max="1000" class="small-text" /></label>',
+			'<label>%s <input type="number" id="wwc-label-limit" value="25" min="1" max="5000" class="small-text" /></label>',
 			esc_html__( 'Label at most this many products:', 'wellness-chatbot' )
+		);
+		printf(
+			' <label><input type="checkbox" id="wwc-label-all" /> %s</label>',
+			esc_html__( 'label the entire catalogue (ignore the limit above)', 'wellness-chatbot' )
 		);
 		printf(
 			' <label><input type="checkbox" id="wwc-label-reindex" checked="checked" /> %s</label>',
@@ -252,15 +256,30 @@ class WWC_Admin_Labels {
 	}
 
 	private static function render_summary( $counts ) {
-		$total    = isset( $counts['total'] ) ? (int) $counts['total'] : 0;
-		$verified = isset( $counts['verified'] ) ? (int) $counts['verified'] : 0;
-		$queued   = isset( $counts['queued'] ) ? (int) $counts['queued'] : 0;
+		$total     = isset( $counts['total'] ) ? (int) $counts['total'] : 0;
+		$verified  = isset( $counts['verified'] ) ? (int) $counts['verified'] : 0;
+		$queued    = isset( $counts['queued'] ) ? (int) $counts['queued'] : 0;
+		$low_conf  = isset( $counts['low_confidence'] ) ? (int) $counts['low_confidence'] : 0;
 
 		echo '<div class="wwc-cards">';
 		printf( '<div class="wwc-card"><span class="wwc-card-value">%d</span><span class="wwc-card-label">%s</span></div>', (int) $total, esc_html__( 'Products synced', 'wellness-chatbot' ) );
 		printf( '<div class="wwc-card"><span class="wwc-card-value">%d</span><span class="wwc-card-label">%s</span></div>', (int) $verified, esc_html__( 'Recommendable', 'wellness-chatbot' ) );
 		printf( '<div class="wwc-card"><span class="wwc-card-value">%d</span><span class="wwc-card-label">%s</span></div>', (int) $queued, esc_html__( 'Awaiting review', 'wellness-chatbot' ) );
+		printf( '<div class="wwc-card"><span class="wwc-card-value">%d</span><span class="wwc-card-label">%s</span></div>', (int) $low_conf, esc_html__( 'Too thin to recommend', 'wellness-chatbot' ) );
 		echo '</div>';
+
+		if ( $low_conf > 0 ) {
+			printf(
+				'<p class="description">%s</p>',
+				esc_html(
+					sprintf(
+						/* translators: %d: number of low-confidence products. */
+						__( '%d products were labeled but scored too low to be recommended — almost always because their WooCommerce description is empty or very short, so the AI had nothing to work from. They are still findable by name. Filling in real descriptions and re-labeling is what fixes them.', 'wellness-chatbot' ),
+						$low_conf
+					)
+				)
+			);
+		}
 	}
 
 	private static function render_row( array $row ) {
@@ -725,15 +744,22 @@ class WWC_Admin_Labels {
 			return;
 		}
 
-		// Same rule as the upload screen: a missing or non-positive value
-		// falls back to a safe default rather than reaching the backend as
-		// "no limit" — this control must never be able to relabel an entire
-		// catalogue in one uncontrolled run.
-		$limit = isset( $_POST['limit'] ) ? absint( $_POST['limit'] ) : 0;
-		if ( $limit < 1 ) {
-			$limit = 25;
+		// A missing or non-positive value falls back to a safe default rather
+		// than reaching the backend as "no limit" by accident. The 1000 cap is
+		// only lifted by the explicit "label the entire catalogue" checkbox —
+		// a deliberate, visible opt-in to an uncontrolled/unbudgeted run,
+		// never the default behaviour of this control.
+		$label_all = ! empty( $_POST['label_all'] );
+
+		if ( $label_all ) {
+			$limit = 0;
+		} else {
+			$limit = isset( $_POST['limit'] ) ? absint( $_POST['limit'] ) : 0;
+			if ( $limit < 1 ) {
+				$limit = 25;
+			}
+			$limit = min( $limit, 1000 );
 		}
-		$limit = min( $limit, 1000 );
 
 		$response = WWC_Backend_Client::post(
 			'/api/admin/labels/run',

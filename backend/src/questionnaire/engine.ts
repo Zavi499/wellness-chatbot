@@ -76,6 +76,8 @@ export function questionnaireForTopic(topic: string | undefined): QuestionnaireI
       return 'hair';
     case 'vitamins':
       return 'vitamins';
+    case 'general':
+      return 'general';
     // "routine" and "compare" reuse the face flow to gather a baseline, then
     // branch in the orchestrator rather than having their own question set.
     case 'routine':

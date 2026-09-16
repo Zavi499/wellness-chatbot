@@ -86,6 +86,14 @@ export const config = {
 
   recommendations: {
     allowPartialVerification: bool('ALLOW_PARTIAL_VERIFICATION', true),
+    /**
+     * Minimum AI self-reported confidence for an AI-labeled product to be
+     * recommendable. Products labeled from a thin or empty WooCommerce
+     * description score low and carry mostly-null fields — recommending
+     * those is what produces confident-sounding but baseless matches.
+     * Set to 0 to disable the floor entirely.
+     */
+    minConfidence: num('RECOMMEND_MIN_CONFIDENCE', 0.35),
   },
 } as const;
 

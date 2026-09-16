@@ -43,7 +43,7 @@ export interface QuestionnaireConfig {
   notice_ar?: string;
 }
 
-const IDS = ['entry', 'face', 'body', 'hair', 'vitamins'] as const;
+const IDS = ['entry', 'face', 'body', 'hair', 'vitamins', 'general'] as const;
 export type QuestionnaireId = (typeof IDS)[number];
 
 function overrideDir(): string {

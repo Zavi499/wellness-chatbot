@@ -12,7 +12,14 @@ export type VerificationStatus =
   | 'unverified'
   | 'needs_pharmacist_review';
 
-export type CategoryKey = 'face' | 'body' | 'hair' | 'vitamins' | 'routine' | 'compare';
+export type CategoryKey =
+  | 'face'
+  | 'body'
+  | 'hair'
+  | 'vitamins'
+  | 'general'
+  | 'routine'
+  | 'compare';
 
 export type TriState = 'yes' | 'no' | 'unspecified';
 

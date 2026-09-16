@@ -6,7 +6,7 @@
  * rejection carries a reason so the admin can see why the catalogue is thin.
  */
 import { config } from '../config.js';
-import { resolveProductCategory } from '../products/category.js';
+import { resolveProductCategory, isLikelyMedicine } from '../products/category.js';
 import { normalizeQuery } from '../search/normalize.js';
 import type { Product } from '../types.js';
 import type { CustomerProfile } from './profile.js';
@@ -20,6 +20,8 @@ export type IneligibilityReason =
   | 'fragrance_conflict'
   | 'alcohol_conflict'
   | 'age_conflict'
+  | 'low_confidence'
+  | 'medicine'
   | 'excluded';
 
 export interface EligibilityResult {
@@ -98,6 +100,34 @@ export function checkEligibility(
     name: product.name,
   });
   if (productCategory !== profile.category) reasons.push('category_mismatch');
+
+  // 3a. Medicines are findable and purchasable by name (`search_products`)
+  // but never ranked into a recommendation. The data needed to do that
+  // accurately — indication, dose, contraindications, interactions — is
+  // deliberately never collected by labeling, so a ranked suggestion here
+  // would be built entirely from null fields. See `isLikelyMedicine()`.
+  // Scoped to `general`: a vitamins-shelf product with a strength in its
+  // name is a supplement, not a medicine, and stays recommendable.
+  if (
+    productCategory === 'general' &&
+    isLikelyMedicine({ categories: product.categories, tags: product.tags, name: product.name })
+  ) {
+    reasons.push('medicine');
+  }
+
+  // 3b. Confidence floor. A product labeled from a bare title — no
+  // description, no attributes — comes back with mostly-null fields and a
+  // low self-reported confidence, yet still lands as `verified`. Recommending
+  // it is how the catalogue produces confident-looking but baseless matches,
+  // so hold AI-labeled products to a minimum score. Human-verified products
+  // (`ai_generated = false`) carry no AI confidence and are exempt.
+  if (
+    product.ai_generated &&
+    product.ai_confidence !== null &&
+    product.ai_confidence < config.recommendations.minConfidence
+  ) {
+    reasons.push('low_confidence');
+  }
 
   // 4. `not_ideal_for` conflicts with the customer's stated type or concern.
   const notIdeal = notIdealText(product);

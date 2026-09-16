@@ -203,25 +203,12 @@ export async function labelProduct(productId: number): Promise<LabelRunResult> {
     name: product.name,
   });
 
-  if (!category) {
-    // No guessing. The queue shows this as "needs a category" for a human.
-    const draftId = insertDraft(productId, null, { note: 'Category could not be resolved' }, 0, 'n/a');
-    updateWwcFields(productId, {
-      verification_status: 'unverified',
-      ai_generated: true,
-      ai_confidence: 0,
-      requires_pharmacist_review: false,
-    });
-    return {
-      product_id: productId,
-      draft_id: draftId,
-      category: 'face',
-      confidence: 0,
-      requires_pharmacist_review: false,
-      gate_reasons: ['Category could not be resolved from the store taxonomy'],
-    };
-  }
-
+  // There is no longer an "unresolved category" branch here: anything that
+  // doesn't match a consultative shelf resolves to `general` (see
+  // `resolveProductCategory`). Previously such products were written back as
+  // ai_generated + unverified with an empty draft, which left them both
+  // permanently stuck in the review queue AND permanently ineligible for a
+  // re-run — nothing a human could actually resolve.
   const { draft, model } = await callLabelingModel(product, category);
   const confidence = clampConfidence(draft.confidence);
 

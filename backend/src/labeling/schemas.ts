@@ -99,6 +99,35 @@ function baseProperties(): Record<string, JsonSchema> {
   };
 }
 
+/**
+ * `general` reuses the exact same field set as every other category — so
+ * nothing downstream (the `_wwc_*` columns, `draftToPatch`, the admin review
+ * table, the recommendation cards) needs to know this category exists — but
+ * rewords the three shelf-specific fields so the model reads them
+ * generically. "Concern" for a lip pencil is a look, not a skin condition;
+ * "suitable types" for a baby bottle is an age, not a scalp type.
+ */
+function generalProperties(): Record<string, JsonSchema> {
+  const props = baseProperties();
+  props.concern_primary = bilingualList(
+    'What this product is mainly FOR — the need, use or occasion it addresses. Use the product\'s own words, e.g. "lip colour", "teething relief", "wound cleaning", "dry hands". Not limited to skin concerns.',
+  );
+  props.concern_secondary = bilingualList('Other needs it also serves, if clearly supported by the text.');
+  props.suitable_types = bilingualList(
+    'Who or what this suits — e.g. "babies 0-6 months", "sensitive skin", "daily use", "travel". Only what the source text supports.',
+  );
+  props.key_ingredients = {
+    type: 'array',
+    items: { type: 'string' },
+    description:
+      'Headline ingredients, actives or materials, exact names as written in the source. Leave empty for a product where this does not apply (a device, an accessory). Do NOT translate and do NOT invent.',
+  };
+  props.texture_finish = bilingualText(
+    'Form, texture or finish where the source states it — e.g. matte, gel, powder, spray, sachet.',
+  );
+  return props;
+}
+
 function withRoutineStep(props: Record<string, JsonSchema>): Record<string, JsonSchema> {
   return {
     ...props,
@@ -115,8 +144,17 @@ function withRoutineStep(props: Record<string, JsonSchema>): Record<string, Json
  * model modelling a guess there — a pharmacist fills them in (§13).
  */
 function schemaFor(category: ProductCategory): JsonSchema {
-  const props =
-    category === 'vitamins' ? baseProperties() : withRoutineStep(baseProperties());
+  let props: Record<string, JsonSchema>;
+  if (category === 'vitamins') {
+    props = baseProperties();
+  } else if (category === 'general') {
+    // No routine_step: "cleanse → tone → moisturise" is meaningless for a
+    // thermometer or a lipstick, and offering the field invites the model to
+    // invent one.
+    props = generalProperties();
+  } else {
+    props = withRoutineStep(baseProperties());
+  }
 
   if (category === 'vitamins') {
     props.serving_size = {
@@ -153,6 +191,7 @@ export const LABEL_SCHEMAS: Record<ProductCategory, JsonSchema> = {
   body: schemaFor('body'),
   hair: schemaFor('hair'),
   vitamins: schemaFor('vitamins'),
+  general: schemaFor('general'),
 };
 
 /** The shape the model returns, before validation. */
