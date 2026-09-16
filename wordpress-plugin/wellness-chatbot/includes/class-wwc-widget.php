@@ -97,6 +97,10 @@ class WWC_Widget {
 				// admin-ajax.php, which has no matching action registered).
 				'addToCartUrl' => class_exists( 'WC_AJAX' ) ? esc_url_raw( WC_AJAX::get_endpoint( 'add_to_cart' ) ) : '',
 				'ajaxUrl'      => esc_url_raw( admin_url( 'admin-ajax.php' ) ),
+				// Drives the WhatsApp button above the launcher. Reuses the
+				// existing Business Settings field rather than asking the admin
+				// to enter the same number twice; empty simply hides the button.
+				'whatsappNumber' => (string) WWC_Settings::business_value( 'whatsapp_number' ),
 				'isRtl'        => is_rtl(),
 				'locale'       => get_locale(),
 				'strings'      => self::strings(),
@@ -119,6 +123,8 @@ class WWC_Widget {
 				'send'            => __( 'Send', 'wellness-chatbot' ),
 				'close'           => __( 'Close chat', 'wellness-chatbot' ),
 				'open'            => __( 'Open chat', 'wellness-chatbot' ),
+				'online'          => __( 'Online now', 'wellness-chatbot' ),
+				'whatsapp'        => __( 'Chat on WhatsApp', 'wellness-chatbot' ),
 				'thinking'        => __( 'Thinking…', 'wellness-chatbot' ),
 				'why'             => __( 'Why this?', 'wellness-chatbot' ),
 				'compare'         => __( 'Compare', 'wellness-chatbot' ),
@@ -149,6 +155,8 @@ class WWC_Widget {
 				'send'            => 'إرسال',
 				'close'           => 'إغلاق المحادثة',
 				'open'            => 'فتح المحادثة',
+				'online'          => 'متصل الآن',
+				'whatsapp'        => 'تواصل عبر واتساب',
 				'thinking'        => 'جارٍ التفكير…',
 				'why'             => 'لماذا هذا؟',
 				'compare'         => 'مقارنة',

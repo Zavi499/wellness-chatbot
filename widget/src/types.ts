@@ -60,6 +60,8 @@ export interface Strings {
   send: string;
   close: string;
   open: string;
+  online: string;
+  whatsapp: string;
   thinking: string;
   why: string;
   compare: string;
@@ -88,6 +90,8 @@ export interface WidgetConfig {
   restUrl: string;
   addToCartUrl: string;
   ajaxUrl: string;
+  /** From Settings → Business → WhatsApp number. Empty hides the button. */
+  whatsappNumber?: string;
   isRtl: boolean;
   locale: string;
   strings: Record<Language, Strings>;

@@ -59,6 +59,8 @@ class ChatWidget {
       this.launcher.addEventListener('click', () => this.toggle());
 
       this.panel.hidden = true;
+      const whatsapp = this.buildWhatsappButton();
+      if (whatsapp) this.root.append(whatsapp);
       this.root.append(this.launcher, this.panel);
     } else {
       this.root.append(this.panel);
@@ -69,6 +71,34 @@ class ChatWidget {
     if (this.config.isRtl) this.root.setAttribute('dir', 'rtl');
   }
 
+  /**
+   * A plain link to wa.me, rendered only when a WhatsApp number is configured
+   * in Settings → Business. A link rather than a button so it behaves like one
+   * — middle-click, long-press, "copy link address" all work, and it needs no
+   * JavaScript to function.
+   */
+  private buildWhatsappButton(): HTMLElement | null {
+    // wa.me wants digits only: no +, spaces, dashes or parentheses.
+    const digits = (this.config.whatsappNumber ?? '').replace(/\D/g, '');
+    if (!digits) return null;
+
+    const link = el('a', {
+      class: 'wwc-whatsapp',
+      href: `https://wa.me/${digits}`,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      'aria-label': this.strings.whatsapp,
+      title: this.strings.whatsapp,
+    });
+    // Inline SVG: the widget ships no icon font and must not fetch an asset.
+    link.innerHTML =
+      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+      '<path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15s-.77.97-.94 1.17c-.17.2-.35.22-.64.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.06 2.88 1.21 3.08c.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.69.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35z"/>' +
+      '<path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.32 4.96L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2zm0 18.13h-.01c-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.36c0-4.54 3.7-8.23 8.25-8.23 2.2 0 4.27.86 5.83 2.42a8.19 8.19 0 0 1 2.41 5.82c0 4.54-3.7 8.24-8.23 8.24z"/>' +
+      '</svg>';
+    return link;
+  }
+
   private buildPanel(): HTMLElement {
     const panel = el('section', {
       class: 'wwc-panel',
@@ -76,9 +106,15 @@ class ChatWidget {
       'aria-label': this.strings.title,
     });
 
-    // Header
+    // Header: avatar + name + presence on the start side, close on the end.
     const header = el('header', { class: 'wwc-header' }, [
-      el('h2', { class: 'wwc-title', text: this.strings.title }),
+      el('div', { class: 'wwc-header-id' }, [
+        el('span', { class: 'wwc-avatar', 'aria-hidden': 'true', text: '\u{1F916}' }),
+        el('div', { class: 'wwc-header-text' }, [
+          el('h2', { class: 'wwc-title', text: this.strings.title }),
+          el('p', { class: 'wwc-status', text: this.strings.online }),
+        ]),
+      ]),
     ]);
     const close = el('button', {
       type: 'button',
@@ -307,8 +343,16 @@ class ChatWidget {
       );
     }
 
-    this.messages.append(bubble);
+    this.messages.append(this.botRow(bubble));
     scrollToBottom(this.messages);
+  }
+
+  /** Wraps a bot bubble with its avatar so the column reads as a conversation. */
+  private botRow(bubble: HTMLElement): HTMLElement {
+    return el('div', { class: 'wwc-row wwc-row-bot' }, [
+      el('span', { class: 'wwc-msg-avatar', 'aria-hidden': 'true', text: '\u{1F916}' }),
+      bubble,
+    ]);
   }
 
   private addSystemMessage(text: string): void {
@@ -322,15 +366,19 @@ class ChatWidget {
     this.messages.append(details);
   }
 
+  /** Returns the whole row, not the bubble — the caller removes what it gets
+   *  back, and removing only the bubble would strand its avatar. */
   private addThinking(): HTMLElement {
-    const node = el('div', { class: 'wwc-msg wwc-msg-bot wwc-thinking', 'aria-label': this.strings.thinking }, [
-      el('span', { class: 'wwc-dot' }),
-      el('span', { class: 'wwc-dot' }),
-      el('span', { class: 'wwc-dot' }),
-    ]);
-    this.messages.append(node);
+    const row = this.botRow(
+      el('div', { class: 'wwc-msg wwc-msg-bot wwc-thinking', 'aria-label': this.strings.thinking }, [
+        el('span', { class: 'wwc-dot' }),
+        el('span', { class: 'wwc-dot' }),
+        el('span', { class: 'wwc-dot' }),
+      ]),
+    );
+    this.messages.append(row);
     scrollToBottom(this.messages);
-    return node;
+    return row;
   }
 
   private setComposerEnabled(enabled: boolean): void {

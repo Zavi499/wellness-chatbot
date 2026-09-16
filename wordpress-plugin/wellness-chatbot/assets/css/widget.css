@@ -31,15 +31,16 @@
 }
 
 /* --- Launcher ---------------------------------------------------------------
-   Bottom-center, not bottom-right — this store already has a WhatsApp bubble
-   pinned to the right corner, so the two never overlap. Same position on
-   mobile and desktop; desktop additionally gets a pulse ring and a hover
-   lift, gated behind (min-width: 783px) to match the WP admin breakpoint
-   already used elsewhere in this plugin. */
+   Bottom-right, with the WhatsApp button stacked directly above it (see
+   `.wwc-whatsapp`) so the two read as one control cluster rather than two
+   competing bubbles. Same position on mobile and desktop; desktop
+   additionally gets a pulse ring and a hover lift, gated behind
+   (min-width: 783px) to match the WP admin breakpoint already used elsewhere
+   in this plugin. */
 .wwc-launcher {
 	position: fixed;
 	inset-block-end: 24px;
-	inset-inline-start: 50%;
+	inset-inline-end: 24px;
 	z-index: 99998;
 	display: inline-flex;
 	align-items: center;
@@ -55,7 +56,6 @@
 	box-shadow: 0 8px 24px rgba(var(--wwc-primary-rgb, 147, 34, 170), 0.35), 0 2px 8px rgba(0, 0, 0, 0.14);
 	/* Large tap target for mobile (spec §9.3). */
 	min-height: 48px;
-	transform: translateX(-50%);
 	transform-origin: center bottom;
 	animation:
 		wwc-launcher-enter 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both,
@@ -98,20 +98,20 @@
 @keyframes wwc-launcher-enter {
 	from {
 		opacity: 0;
-		transform: translateX(-50%) translateY(28px) scale(0.82);
+		transform: translateY(28px) scale(0.82);
 	}
 	to {
 		opacity: 1;
-		transform: translateX(-50%) translateY(0) scale(1);
+		transform: translateY(0) scale(1);
 	}
 }
 
 @keyframes wwc-launcher-float {
 	0%, 100% {
-		transform: translateX(-50%) translateY(0) scale(1);
+		transform: translateY(0) scale(1);
 	}
 	50% {
-		transform: translateX(-50%) translateY(-5px) scale(1.02);
+		transform: translateY(-5px) scale(1.02);
 	}
 }
 
@@ -166,12 +166,63 @@
 	}
 }
 
+/* --- WhatsApp button --------------------------------------------------------
+   Sits directly above the chat launcher. Rendered only when a WhatsApp number
+   is set in Settings → Business, and hidden while the chat panel is open so
+   it never overlaps the panel or competes with it for attention. */
+.wwc-whatsapp {
+	position: fixed;
+	inset-block-end: 88px;
+	inset-inline-end: 24px;
+	z-index: 99998;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 52px;
+	height: 52px;
+	border: 0;
+	border-radius: 50%;
+	/* WhatsApp brand green — deliberately not the store palette, because the
+	   whole point of this button is instant recognition. */
+	background: #25d366;
+	color: #fff;
+	cursor: pointer;
+	text-decoration: none;
+	box-shadow: 0 8px 22px rgba(37, 211, 102, 0.38), 0 2px 8px rgba(0, 0, 0, 0.14);
+	transition: transform 0.2s var(--wwc-ease), box-shadow 0.2s ease;
+	animation: wwc-launcher-enter 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.wwc-whatsapp:hover,
+.wwc-whatsapp:focus-visible {
+	transform: translateY(-2px) scale(1.04);
+	box-shadow: 0 14px 30px rgba(37, 211, 102, 0.46), 0 4px 12px rgba(0, 0, 0, 0.16);
+}
+
+.wwc-whatsapp svg {
+	width: 28px;
+	height: 28px;
+	fill: currentColor;
+}
+
+.wwc-widget-root.wwc-open .wwc-whatsapp {
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wwc-whatsapp {
+		animation: none;
+		transition: none;
+	}
+}
+
 /* --- Panel ----------------------------------------------------------------- */
 .wwc-panel {
 	position: fixed;
 	inset-block-end: 88px;
-	inset-inline-start: 50%;
-	transform: translateX(-50%);
+	inset-inline-end: 24px;
 	z-index: 99999;
 	display: flex;
 	flex-direction: column;
@@ -198,11 +249,11 @@
 @keyframes wwc-panel-in {
 	from {
 		opacity: 0;
-		transform: translateX(-50%) translateY(16px) scale(0.96);
+		transform: translateY(16px) scale(0.96);
 	}
 	to {
 		opacity: 1;
-		transform: translateX(-50%) translateY(0) scale(1);
+		transform: translateY(0) scale(1);
 	}
 }
 
@@ -284,6 +335,53 @@
 	z-index: 1;
 }
 
+/* Avatar + name + presence, as one identity block on the start side of the
+   header — the arrangement people already recognise from every support chat. */
+.wwc-header-id {
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	min-width: 0;
+}
+
+.wwc-avatar {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 38px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.18);
+	border: 2px solid rgba(255, 255, 255, 0.55);
+	font-size: 19px;
+	line-height: 1;
+}
+
+.wwc-header-text {
+	min-width: 0;
+}
+
+.wwc-status {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 2px 0 0;
+	font-size: 12px;
+	font-weight: 500;
+	color: rgba(255, 255, 255, 0.86);
+}
+
+.wwc-status::before {
+	content: "";
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: #4ade80;
+	box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.28);
+	flex: 0 0 auto;
+}
+
 .wwc-title {
 	margin: 0;
 	font-size: 15.5px;
@@ -292,17 +390,13 @@
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
-.wwc-title::before {
-	content: "";
-	width: 8px;
-	height: 8px;
-	border-radius: 50%;
-	background: #4ade80;
-	box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25);
-	flex-shrink: 0;
-}
+/* The presence dot moved to `.wwc-status` below the title — a second one here
+   would read as two separate status lights. */
 
 .wwc-icon-btn {
 	background: transparent;
@@ -386,6 +480,42 @@
 
 .wwc-messages::-webkit-scrollbar-track {
 	background: transparent;
+}
+
+/* A bot turn is an avatar + bubble row; a customer turn is just the bubble,
+   right-aligned. The avatar repeats per message rather than only on the first
+   of a run — simpler, and it keeps the column edge readable while scrolling. */
+.wwc-row {
+	display: flex;
+	/* Top-aligned: on a multi-line answer a bottom-aligned avatar drifts far
+	   from the name it belongs to and reads as attached to the wrong turn. */
+	align-items: flex-start;
+	gap: 8px;
+	max-width: 92%;
+}
+
+.wwc-row-bot {
+	align-self: flex-start;
+}
+
+.wwc-row-bot .wwc-msg {
+	max-width: 100%;
+}
+
+.wwc-msg-avatar {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	margin-block-start: 2px;
+	border-radius: 50%;
+	background: var(--wwc-100, #f2e7f6);
+	color: var(--wwc-primary-text);
+	font-size: 14px;
+	line-height: 1;
+	user-select: none;
 }
 
 .wwc-msg {

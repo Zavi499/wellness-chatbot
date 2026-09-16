@@ -49,7 +49,7 @@ class WWC_Settings {
 			),
 			'whatsapp_number'         => array(
 				'label' => __( 'WhatsApp number', 'wellness-chatbot' ),
-				'help'  => __( 'Shared with a customer who asks how to reach you. Include the country code.', 'wellness-chatbot' ),
+				'help'  => __( 'Include the country code, e.g. 96512345678. Shown as a WhatsApp button above the chat launcher on your storefront, and shared with a customer who asks how to reach you. Leave empty to hide the button.', 'wellness-chatbot' ),
 			),
 			'phone_number'            => array(
 				'label' => __( 'Phone number', 'wellness-chatbot' ),
