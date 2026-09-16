@@ -53,6 +53,7 @@
 		}
 
 		var limitInput    = document.getElementById( 'wwc-label-limit' );
+		var labelAllInput = document.getElementById( 'wwc-label-all' );
 		var reindexInput  = document.getElementById( 'wwc-label-reindex' );
 		var startButton   = document.getElementById( 'wwc-label-start' );
 		var panel         = document.getElementById( 'wwc-label-progress' );
@@ -67,8 +68,15 @@
 
 		function setControlsEnabled( enabled ) {
 			startButton.disabled = ! enabled;
-			limitInput.disabled = ! enabled;
+			limitInput.disabled = ! enabled || labelAllInput.checked;
+			labelAllInput.disabled = ! enabled;
 			reindexInput.disabled = ! enabled;
+		}
+
+		if ( labelAllInput ) {
+			labelAllInput.addEventListener( 'change', function () {
+				limitInput.disabled = labelAllInput.checked;
+			} );
 		}
 
 		function stopPolling() {
@@ -138,8 +146,12 @@
 		poll();
 
 		startButton.addEventListener( 'click', function () {
+			var labelAll = labelAllInput.checked;
 			var limit = parseInt( limitInput.value, 10 ) || 25;
-			if ( ! window.confirm( 'Run AI labeling on up to ' + limit + ' products now? They will go straight to verified and recommendable — no review step, for any category.' ) ) {
+			var message = labelAll
+				? 'Run AI labeling on the ENTIRE catalogue now — every never-labeled product, no cap? They will go straight to verified and recommendable — no review step, for any category. This can take a while and will use OpenAI credit for every product labeled.'
+				: 'Run AI labeling on up to ' + limit + ' products now? They will go straight to verified and recommendable — no review step, for any category.';
+			if ( ! window.confirm( message ) ) {
 				return;
 			}
 
@@ -151,6 +163,7 @@
 
 			ajaxRequest( 'wwc_start_labeling', {
 				limit: limit,
+				label_all: labelAll ? '1' : '',
 				reindex: reindexInput.checked ? '1' : '',
 			} ).then( function ( result ) {
 				if ( result.ok ) {
