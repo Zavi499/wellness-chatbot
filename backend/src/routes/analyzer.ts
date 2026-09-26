@@ -34,10 +34,22 @@ interface Body {
   token?: string;
 }
 
-/** The shape every step returns, so the wizard has one thing to render. */
+/**
+ * The shape every step returns, so the wizard has one thing to render.
+ *
+ * Persists unconditionally before returning, and is the single exit point of
+ * every analyzer route for exactly that reason. `recordAnswer()` only mutates
+ * the in-memory object — the chat gets away with that because its
+ * orchestrator saves once at the end of a turn, but each analyzer step is its
+ * own request. Saving on only some branches meant every intermediate answer
+ * was dropped, and the wizard oscillated between the first two questions
+ * forever instead of advancing.
+ */
 function stepPayload(def: AnalyzerDefinition, state: SessionState, language: Language) {
   const step = nextQuestion(def.questionnaire, state.answers, STEP_OPTS);
+
   if (!step.done && step.question) {
+    saveSession(state);
     return {
       done: false as const,
       question: {
