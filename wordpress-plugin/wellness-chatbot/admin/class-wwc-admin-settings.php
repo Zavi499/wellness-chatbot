@@ -221,7 +221,7 @@ class WWC_Admin_Settings {
 			),
 			'vision' => array(
 				'label' => __( 'Photo analysis model', 'wellness-chatbot' ),
-				'help'  => __( 'Used by the skin and hair analyzers to read a customer's photo. Must be a model that accepts images. Leave blank to use whatever the chat model is set to.', 'wellness-chatbot' ),
+				'help'  => __( 'Used by the skin and hair analyzers to read an uploaded photo. Must be a model that accepts images. Leave blank to use whatever the chat model is set to.', 'wellness-chatbot' ),
 			),
 		);
 
