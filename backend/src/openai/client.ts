@@ -37,6 +37,12 @@ export const models = {
   cheap: () => getModelOverrides().cheap ?? config.openai.cheapModel,
   /** Product auto-labeling, where accuracy matters most. */
   label: () => getModelOverrides().label ?? config.openai.labelModel,
+  /**
+   * Photo analysis for the skin/hair analyzers. Falls back to the chat
+   * tier when unset, so a store that swaps its chat model to a newer
+   * multimodal one gets vision on it automatically.
+   */
+  vision: () => getModelOverrides().vision ?? (config.openai.visionModel || models.chat()),
   /** Embeddings for semantic product/FAQ search. */
   embed: () => config.openai.embedModel,
 };

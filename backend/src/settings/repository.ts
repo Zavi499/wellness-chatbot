@@ -88,12 +88,14 @@ const MODEL_OVERRIDE_DB_KEYS = {
   chat: 'openai_model_chat',
   cheap: 'openai_model_cheap',
   label: 'openai_model_label',
+  vision: 'openai_model_vision',
 } as const;
 
 export interface ModelOverrides {
   chat: string | null;
   cheap: string | null;
   label: string | null;
+  vision: string | null;
 }
 
 export function getModelOverrides(): ModelOverrides {
@@ -110,6 +112,7 @@ export function getModelOverrides(): ModelOverrides {
     chat: read(MODEL_OVERRIDE_DB_KEYS.chat),
     cheap: read(MODEL_OVERRIDE_DB_KEYS.cheap),
     label: read(MODEL_OVERRIDE_DB_KEYS.label),
+    vision: read(MODEL_OVERRIDE_DB_KEYS.vision),
   };
 }
 

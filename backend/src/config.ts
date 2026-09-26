@@ -58,6 +58,13 @@ export const config = {
     chatModel: optional('OPENAI_MODEL_CHAT', 'gpt-5.6-terra'),
     cheapModel: optional('OPENAI_MODEL_CHEAP', 'gpt-5.6-luna'),
     labelModel: optional('OPENAI_MODEL_LABEL', 'gpt-5.6-sol'),
+    /**
+     * Photo analysis for the skin/hair analyzers. Empty means "use whatever
+     * the chat tier is set to" — the common case, since the chat model is
+     * normally multimodal anyway. Set it only to pin vision to a different
+     * model than conversation.
+     */
+    visionModel: optional('OPENAI_MODEL_VISION', ''),
     embedModel: optional('OPENAI_MODEL_EMBED', 'text-embedding-3-small'),
     embedDimensions: num('OPENAI_EMBED_DIMENSIONS', 1536),
   },
@@ -82,6 +89,9 @@ export const config = {
   rateLimit: {
     sessionPerMin: num('RATE_LIMIT_SESSION_PER_MIN', 20),
     ipPerMin: num('RATE_LIMIT_IP_PER_MIN', 60),
+    /** Analyzer photo uploads, per hour — each one costs a vision call. */
+    photoPerSession: num('RATE_LIMIT_PHOTO_PER_SESSION', 6),
+    photoPerIpHour: num('RATE_LIMIT_PHOTO_PER_IP_HOUR', 20),
   },
 
   recommendations: {

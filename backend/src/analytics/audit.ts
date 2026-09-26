@@ -67,7 +67,11 @@ export type EventName =
   | 'feedback_up'
   | 'feedback_down'
   | 'turn_completed'
-  | 'language_locked';
+  | 'language_locked'
+  | 'analyzer_started'
+  | 'analyzer_photo_analyzed'
+  | 'analyzer_photo_rejected'
+  | 'analyzer_completed';
 
 export function logEvent(name: EventName, sessionId: string | null, payload?: unknown): void {
   db()

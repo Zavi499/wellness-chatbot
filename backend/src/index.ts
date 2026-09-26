@@ -11,6 +11,7 @@ import cors from '@fastify/cors';
 import { config } from './config.js';
 import { db } from './db/index.js';
 import { chatRoutes } from './routes/chat.js';
+import { analyzerRoutes } from './routes/analyzer.js';
 import { adminRoutes } from './routes/admin.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { pruneExpiredSessions } from './chat/session.js';
@@ -61,6 +62,7 @@ export async function buildServer() {
   });
 
   await app.register(chatRoutes);
+  await app.register(analyzerRoutes);
   await app.register(adminRoutes);
   await app.register(webhookRoutes);
 

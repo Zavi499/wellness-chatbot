@@ -86,6 +86,34 @@ export interface Strings {
   size: string;
 }
 
+/**
+ * The labels a product card needs — the subset of `Strings` shared with the
+ * skin/hair analyzers, which render the same cards but have no launcher,
+ * composer or transcript to name.
+ */
+export type CardStrings = Pick<
+  Strings,
+  | 'compare'
+  | 'compareTitle'
+  | 'replace'
+  | 'addToCart'
+  | 'viewProduct'
+  | 'outOfStock'
+  | 'inStock'
+  | 'why'
+  | 'bestFor'
+  | 'whatToKnow'
+  | 'howToUse'
+  | 'price'
+  | 'size'
+  | 'close'
+  | 'helpful'
+  | 'yes'
+  | 'no'
+  | 'feedbackReason'
+  | 'send'
+>;
+
 export interface WidgetConfig {
   restUrl: string;
   addToCartUrl: string;

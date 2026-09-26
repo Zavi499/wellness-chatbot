@@ -190,9 +190,10 @@ class WWC_Admin_Settings {
 		echo '<p class="description">' . esc_html__( 'Leave a field blank to use the backend server\'s own default. Setting one here takes effect immediately — no redeploy needed.', 'wellness-chatbot' ) . '</p>';
 
 		$overrides = array(
-			'chat'  => '',
-			'cheap' => '',
-			'label' => '',
+			'chat'   => '',
+			'cheap'  => '',
+			'label'  => '',
+			'vision' => '',
 		);
 		if ( WWC_Settings::is_connected() ) {
 			$result = WWC_Backend_Client::get( '/api/admin/openai/model-overrides' );
@@ -217,6 +218,10 @@ class WWC_Admin_Settings {
 			'label' => array(
 				'label' => __( 'Labeling model', 'wellness-chatbot' ),
 				'help'  => __( 'Used for AI product auto-labeling, where accuracy matters most.', 'wellness-chatbot' ),
+			),
+			'vision' => array(
+				'label' => __( 'Photo analysis model', 'wellness-chatbot' ),
+				'help'  => __( 'Used by the skin and hair analyzers to read a customer's photo. Must be a model that accepts images. Leave blank to use whatever the chat model is set to.', 'wellness-chatbot' ),
 			),
 		);
 
@@ -407,7 +412,7 @@ class WWC_Admin_Settings {
 			// override that was set can be cleared by emptying the field, not
 			// just left stuck at whatever was chosen last.
 			$models = array();
-			foreach ( array( 'chat', 'cheap', 'label' ) as $tier ) {
+			foreach ( array( 'chat', 'cheap', 'label', 'vision' ) as $tier ) {
 				$value              = isset( $_POST[ 'model_' . $tier ] ) ? sanitize_text_field( wp_unslash( $_POST[ 'model_' . $tier ] ) ) : '';
 				$models[ $tier ] = '' === $value ? null : $value;
 			}

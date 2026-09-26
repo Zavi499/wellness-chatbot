@@ -31,6 +31,7 @@ class WWC_Plugin {
 		WWC_Queue::init();
 		WWC_Webhooks::init();
 		WWC_Widget::init();
+		WWC_Analyzer::init();
 
 		if ( is_admin() ) {
 			WWC_Admin::init();

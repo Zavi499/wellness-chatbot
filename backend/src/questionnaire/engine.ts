@@ -30,9 +30,30 @@ export function isAnswered(q: Question, answers: AnswerMap): boolean {
   return String(value).trim() !== '';
 }
 
+/**
+ * Whether a question should be put to this customer at all.
+ *
+ * `includeOptional` exists for the skin/hair analyzers. In chat, brevity is
+ * the point and optional questions are skipped — but "are you already using
+ * retinol / vitamin C / acids", "any formula preferences" and the rest are
+ * exactly the detail a dedicated analysis page is for, and the customer
+ * arrived expecting to be asked.
+ */
+export interface StepOptions {
+  includeOptional?: boolean;
+}
+
+function askable(q: Question, answers: AnswerMap, opts: StepOptions): boolean {
+  return isApplicable(q, answers) && (opts.includeOptional === true || !q.optional);
+}
+
 /** The questions this session still needs, in order. */
-export function pendingQuestions(cfg: QuestionnaireConfig, answers: AnswerMap): Question[] {
-  return cfg.questions.filter((q) => isApplicable(q, answers) && !isAnswered(q, answers) && !q.optional);
+export function pendingQuestions(
+  cfg: QuestionnaireConfig,
+  answers: AnswerMap,
+  opts: StepOptions = {},
+): Question[] {
+  return cfg.questions.filter((q) => askable(q, answers, opts) && !isAnswered(q, answers));
 }
 
 export interface NextStep {
@@ -43,9 +64,13 @@ export interface NextStep {
   done: boolean;
 }
 
-export function nextQuestion(id: QuestionnaireId, answers: AnswerMap): NextStep {
+export function nextQuestion(
+  id: QuestionnaireId,
+  answers: AnswerMap,
+  opts: StepOptions = {},
+): NextStep {
   const cfg = loadQuestionnaire(id);
-  const applicable = cfg.questions.filter((q) => isApplicable(q, answers) && !q.optional);
+  const applicable = cfg.questions.filter((q) => askable(q, answers, opts));
   const answered = applicable.filter((q) => isAnswered(q, answers));
   const remaining = applicable.filter((q) => !isAnswered(q, answers));
 

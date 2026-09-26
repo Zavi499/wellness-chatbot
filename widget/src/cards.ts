@@ -2,7 +2,7 @@
  * Recommendation cards and the compare drawer (spec §4.7, §9.2).
  */
 import { el, clear } from './dom.js';
-import type { RecommendationItem, RecommendationSet, Strings } from './types.js';
+import type { CardStrings, RecommendationItem, RecommendationSet } from './types.js';
 
 export interface CardCallbacks {
   onViewProduct: (item: RecommendationItem) => void;
@@ -11,10 +11,21 @@ export interface CardCallbacks {
   onReplace: (item: RecommendationItem) => void;
 }
 
+export interface RenderOptions {
+  /**
+   * Whether the "Compare" button may appear. The compare drawer is absolutely
+   * positioned to cover the chat panel, so a surface without one (the
+   * analyzer pages) turns it off rather than rendering a button that opens a
+   * drawer in the wrong place.
+   */
+  allowCompare?: boolean;
+}
+
 export function renderRecommendations(
   set: RecommendationSet,
-  strings: Strings,
+  strings: CardStrings,
   callbacks: CardCallbacks,
+  options: RenderOptions = {},
 ): HTMLElement {
   const wrapper = el('div', { class: 'wwc-recommendations', role: 'region', 'aria-label': strings.compareTitle });
 
@@ -22,7 +33,7 @@ export function renderRecommendations(
     wrapper.append(renderCard(item, strings, callbacks));
   }
 
-  if (set.items.length > 1) {
+  if (set.items.length > 1 && options.allowCompare !== false) {
     const compare = el('button', {
       type: 'button',
       class: 'wwc-btn wwc-btn-ghost wwc-compare-all',
@@ -40,7 +51,7 @@ export function renderRecommendations(
   return wrapper;
 }
 
-function renderCard(item: RecommendationItem, strings: Strings, callbacks: CardCallbacks): HTMLElement {
+export function renderCard(item: RecommendationItem, strings: CardStrings, callbacks: CardCallbacks): HTMLElement {
   const card = el('article', { class: 'wwc-card' });
 
   // Search-result cards carry no slot badge ("Best Overall Match" etc.) —
@@ -120,7 +131,7 @@ function renderCard(item: RecommendationItem, strings: Strings, callbacks: CardC
 /** Side-by-side comparison without leaving the chat (spec §9.2). */
 export function renderCompareDrawer(
   set: RecommendationSet,
-  strings: Strings,
+  strings: CardStrings,
   onClose: () => void,
 ): HTMLElement {
   const drawer = el('div', {
@@ -171,7 +182,7 @@ export function renderCompareDrawer(
 
 /** Thumbs up/down with an optional reason (spec §9.2, KPI in §14). */
 export function renderFeedback(
-  strings: Strings,
+  strings: CardStrings,
   onRate: (rating: 'up' | 'down', reason?: string) => void,
 ): HTMLElement {
   const box = el('div', { class: 'wwc-feedback' });

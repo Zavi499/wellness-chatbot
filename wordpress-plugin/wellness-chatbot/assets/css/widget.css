@@ -6,7 +6,13 @@
  * Arabic RTL layout mirrors without a second stylesheet.
  */
 
-.wwc-widget-root {
+/* The analyzer pages reuse the card, button and chip styles below, so they
+   need the same tokens — these are declared here rather than on :root so
+   the widget never leaks variables into the host theme. The brand ramp is
+   injected separately at enqueue time (WWC_Brand::css_vars) against this
+   same selector list. */
+.wwc-widget-root,
+.wwc-analyzer-root {
 	--wwc-radius: 16px;
 	--wwc-radius-lg: 22px;
 	--wwc-text: #1a1d23;
@@ -26,7 +32,10 @@
 
 .wwc-widget-root *,
 .wwc-widget-root *::before,
-.wwc-widget-root *::after {
+.wwc-widget-root *::after,
+.wwc-analyzer-root *,
+.wwc-analyzer-root *::before,
+.wwc-analyzer-root *::after {
 	box-sizing: inherit;
 }
 

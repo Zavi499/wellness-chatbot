@@ -1,0 +1,273 @@
+/**
+ * Skin / hair analyzer pages.
+ *
+ * Layout only. Product cards, buttons, chips and stock badges all come from
+ * widget.css unchanged — they are flat single-class selectors with no chat
+ * panel ancestor, so the same card renders here and in the chat. What this
+ * file adds is the wide, centred, one-question-per-screen shape that a full
+ * page wants and a 380px chat panel does not, plus a larger type scale to
+ * match.
+ */
+
+.wwc-analyzer-root {
+	max-width: 720px;
+	margin-inline: auto;
+	padding: 8px 16px 40px;
+	font-family: inherit;
+	color: var(--wwc-text);
+	line-height: 1.55;
+}
+
+/* --- Progress -------------------------------------------------------------- */
+.wwc-an-progress {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 24px;
+}
+
+.wwc-an-progress[hidden] {
+	display: none;
+}
+
+.wwc-an-progress-label {
+	flex: 0 0 auto;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--wwc-primary-text);
+}
+
+.wwc-an-progress-track {
+	flex: 1 1 auto;
+	height: 6px;
+	border-radius: 999px;
+	background: var(--wwc-100);
+	overflow: hidden;
+}
+
+.wwc-an-progress-fill {
+	display: block;
+	height: 100%;
+	width: 0;
+	border-radius: 999px;
+	background: var(--wwc-primary);
+	transition: width 0.35s var(--wwc-ease);
+}
+
+/* --- Screens --------------------------------------------------------------- */
+.wwc-an-screen {
+	animation: wwc-an-in 0.3s var(--wwc-ease) both;
+}
+
+@keyframes wwc-an-in {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wwc-an-screen {
+		animation: none;
+	}
+
+	.wwc-an-progress-fill {
+		transition: none;
+	}
+}
+
+.wwc-an-title {
+	margin: 0 0 12px;
+	font-size: clamp(20px, 3vw, 27px);
+	font-weight: 700;
+	line-height: 1.25;
+	color: var(--wwc-primary-text);
+}
+
+.wwc-an-lede {
+	margin: 0 0 20px;
+	font-size: 16px;
+	color: var(--wwc-muted);
+	max-width: 56ch;
+}
+
+.wwc-an-cta {
+	min-height: 48px;
+	padding-inline: 28px;
+	font-size: 16px;
+}
+
+/* --- Photo step ------------------------------------------------------------ */
+.wwc-an-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 16px;
+}
+
+/* The real input stays reachable by keyboard and screen reader; the <label>
+   is what gets styled as the button. `display:none` would take it out of the
+   accessibility tree and break the keyboard path entirely. */
+.wwc-an-file {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.wwc-an-choose {
+	display: inline-flex;
+	align-items: center;
+	min-height: 48px;
+	padding-inline: 24px;
+	font-size: 16px;
+	cursor: pointer;
+}
+
+.wwc-an-file:focus-visible + .wwc-an-choose {
+	outline: 3px solid var(--wwc-400);
+	outline-offset: 2px;
+}
+
+.wwc-an-privacy {
+	margin: 0;
+	font-size: 13px;
+	color: var(--wwc-muted);
+	max-width: 56ch;
+}
+
+.wwc-an-working {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.wwc-an-working::before {
+	content: "";
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	border: 2px solid var(--wwc-200);
+	border-top-color: var(--wwc-primary);
+	animation: wwc-an-spin 0.8s linear infinite;
+	flex: 0 0 auto;
+}
+
+@keyframes wwc-an-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wwc-an-working::before {
+		animation: none;
+	}
+}
+
+/* --- Notices --------------------------------------------------------------- */
+.wwc-an-notice,
+.wwc-an-error,
+.wwc-an-referral {
+	margin: 0 0 18px;
+	padding: 12px 16px;
+	border-radius: var(--wwc-radius);
+	font-size: 15px;
+	border-inline-start: 4px solid;
+}
+
+.wwc-an-notice {
+	background: #fdf6e3;
+	border-color: #dba617;
+	color: #6b5200;
+}
+
+.wwc-an-error {
+	background: #fdecec;
+	border-color: #d63638;
+	color: #b32d2e;
+}
+
+/* A referral is the one message on these pages that must not be skimmed. */
+.wwc-an-referral {
+	background: var(--wwc-50);
+	border-color: var(--wwc-primary);
+	color: var(--wwc-text);
+	font-size: 16px;
+}
+
+.wwc-an-summary {
+	margin-bottom: 16px;
+	padding: 18px 20px;
+	border-radius: var(--wwc-radius);
+	background: var(--wwc-50);
+	font-size: 16px;
+}
+
+.wwc-an-note {
+	margin: 0 0 20px;
+	font-size: 14px;
+	color: var(--wwc-muted);
+}
+
+/* --- Questions ------------------------------------------------------------- */
+.wwc-an-options {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-bottom: 20px;
+}
+
+.wwc-an-option {
+	font-size: 15px;
+	min-height: 48px;
+	padding-inline: 20px;
+}
+
+/* --- Results --------------------------------------------------------------- */
+.wwc-an-results .wwc-recommendations {
+	gap: 16px;
+	margin-bottom: 24px;
+}
+
+/* Cards are built for a narrow panel; on a real page they can sit side by
+   side once there is room for two without squeezing the buttons. */
+@media (min-width: 680px) {
+	.wwc-an-results .wwc-recommendations {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		align-items: start;
+	}
+
+	.wwc-an-results .wwc-disclaimer,
+	.wwc-an-results .wwc-shortfall,
+	.wwc-an-results .wwc-compare-all {
+		grid-column: 1 / -1;
+	}
+}
+
+.wwc-an-results .wwc-card-name {
+	font-size: 16px;
+}
+
+.wwc-an-restart {
+	min-height: 44px;
+}
+
+/* --- Busy ------------------------------------------------------------------ */
+.wwc-an-busy .wwc-an-option,
+.wwc-an-busy .wwc-an-cta,
+.wwc-an-busy .wwc-an-choose {
+	opacity: 0.55;
+	pointer-events: none;
+}
