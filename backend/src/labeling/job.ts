@@ -153,7 +153,9 @@ function recordProgress(job: LabelJobState, last: LabelRunResult | Error): void 
   appendLog(job, {
     product_id: last.product_id,
     name: product?.name ?? null,
-    level: 'info',
-    message: `Labeled "${name}" (${last.category}, confidence ${last.confidence.toFixed(2)})${flag}`,
+    level: last.label_issues.length ? 'error' : 'info',
+    message: `Labeled "${name}" as ${last.product_type ?? 'NO TYPE'} (${last.category}, confidence ${last.confidence.toFixed(2)})${flag}${
+      last.label_issues.length ? ` — CHECK TYPE: ${last.label_issues.join(' ')}` : ''
+    }`,
   });
 }

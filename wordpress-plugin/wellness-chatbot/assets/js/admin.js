@@ -282,9 +282,161 @@
 		} );
 	}
 
+	/**
+	 * "Resync all products": asks the site for one batch at a time until the
+	 * catalogue is exhausted, so no single request runs long enough to time
+	 * out. See WWC_Admin_Accuracy::ajax_resync_chunk().
+	 */
+	function initResync() {
+		var button = document.getElementById( 'wwc-resync-start' );
+		var status = document.getElementById( 'wwc-resync-status' );
+		if ( ! button || ! status ) {
+			return;
+		}
+
+		button.addEventListener( 'click', function () {
+			var sent = 0;
+			button.disabled = true;
+
+			function step( page ) {
+				status.textContent = 'Sending batch ' + page + '… (' + sent + ' products so far)';
+				ajaxRequest( 'wwc_resync_chunk', { page: page } ).then( function ( result ) {
+					if ( ! result.ok ) {
+						status.textContent = 'Stopped at batch ' + page + ': ' + ( ( result.data && result.data.message ) || 'unknown error' ) + '. ' + sent + ' products were sent — click again to retry.';
+						button.disabled = false;
+						return;
+					}
+					sent += result.data.sent;
+					if ( result.data.done ) {
+						status.textContent = 'Done — ' + sent + ' products resynced. Reload this page to see the categories.';
+						button.disabled = false;
+						return;
+					}
+					step( page + 1 );
+				} );
+			}
+
+			step( 1 );
+		} );
+	}
+
+	function el( tag, className, text ) {
+		var node = document.createElement( tag );
+		if ( className ) {
+			node.className = className;
+		}
+		if ( text !== undefined && text !== null ) {
+			node.textContent = String( text );
+		}
+		return node;
+	}
+
+	var STATUS_TEXT = {
+		matched: 'Showing products of the requested type that match the need.',
+		type_only: 'None of this type is labelled for the need — showing the same type anyway, with a note saying so.',
+		none_of_type: 'The store has no recommendable product of this type. The assistant says so and offers nothing else.',
+		need_type: 'No product type was understood — the assistant would ask which kind of product.',
+		medicine: 'A medicine was requested — never recommended; the assistant points to a pharmacist.'
+	};
+
+	function renderTestResult( container, data ) {
+		container.textContent = '';
+
+		if ( ! data.tool ) {
+			container.appendChild( el( 'p', '', 'The assistant would not look up products yet. It would reply:' ) );
+			container.appendChild( el( 'blockquote', '', data.reply || '(empty reply)' ) );
+			return;
+		}
+
+		var understood = data.understood || {};
+		var summary = el( 'div', 'wwc-card' );
+		summary.appendChild( el( 'p', '', 'Tool: ' + data.tool ) );
+		if ( data.tool === 'find_products' ) {
+			summary.appendChild( el( 'p', '', 'Product type(s): ' + ( ( understood.product_types || [] ).join( ', ' ) || '(none)' ) ) );
+			summary.appendChild( el( 'p', '', 'Need: ' + ( [].concat( understood.concerns || [], understood.for_types || [], understood.ingredients_wanted || [] ).join( ', ' ) || '(none stated)' ) ) );
+			summary.appendChild( el( 'p', '', STATUS_TEXT[ data.status ] || data.status ) );
+			summary.appendChild( el( 'p', 'description',
+				data.products_of_type + ' products of this type in the catalogue · ' +
+				data.eligible_of_type + ' recommendable · ' +
+				data.matching_need + ' labelled for the need' ) );
+			var held = Object.keys( data.held_back || {} );
+			if ( held.length ) {
+				summary.appendChild( el( 'p', 'description', 'Held back: ' + held.map( function ( k ) {
+					return k.replace( /_/g, ' ' ) + ' (' + data.held_back[ k ] + ')';
+				} ).join( ', ' ) ) );
+			}
+		} else {
+			summary.appendChild( el( 'p', '', 'Looked up by name: ' + ( understood.query || '' ) ) );
+		}
+		container.appendChild( summary );
+
+		var rows = data.picks || data.results || [];
+		if ( ! rows.length ) {
+			container.appendChild( el( 'p', '', 'No products would be shown.' ) );
+			return;
+		}
+
+		var table = el( 'table', 'widefat striped' );
+		var head = el( 'tr' );
+		[ 'Product', 'Type', 'Labelled for', 'Why' ].forEach( function ( h ) {
+			head.appendChild( el( 'th', '', h ) );
+		} );
+		var thead = el( 'thead' );
+		thead.appendChild( head );
+		table.appendChild( thead );
+
+		var tbody = el( 'tbody' );
+		rows.forEach( function ( row ) {
+			var tr = el( 'tr' );
+			tr.appendChild( el( 'td', '', row.name + ' (#' + row.product_id + ')' ) );
+			tr.appendChild( el( 'td', '', row.product_type_label || row.product_type || 'no type' ) );
+			tr.appendChild( el( 'td', '', [].concat( row.concerns || [], row.suitable_types || [] ).join( ', ' ) ) );
+			tr.appendChild( el( 'td', '', row.reasons ? row.reasons.join( ' · ' ) : ( 'score ' + row.score ) ) );
+			tbody.appendChild( tr );
+		} );
+		table.appendChild( tbody );
+		container.appendChild( table );
+	}
+
+	function initTestQuestion() {
+		var input = document.getElementById( 'wwc-test-input' );
+		var button = document.getElementById( 'wwc-test-run' );
+		var result = document.getElementById( 'wwc-test-result' );
+		if ( ! input || ! button || ! result ) {
+			return;
+		}
+
+		function run() {
+			var question = input.value.trim();
+			if ( ! question ) {
+				return;
+			}
+			button.disabled = true;
+			result.textContent = 'Asking the assistant…';
+			ajaxRequest( 'wwc_test_question', { question: question } ).then( function ( res ) {
+				button.disabled = false;
+				if ( ! res.ok ) {
+					result.textContent = ( res.data && res.data.message ) || 'The test failed.';
+					return;
+				}
+				renderTestResult( result, res.data );
+			} );
+		}
+
+		button.addEventListener( 'click', run );
+		input.addEventListener( 'keydown', function ( event ) {
+			if ( event.key === 'Enter' ) {
+				event.preventDefault();
+				run();
+			}
+		} );
+	}
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		initLabelingRunner();
 		initModelPicker();
+		initResync();
+		initTestQuestion();
 
 		confirmBefore(
 			'.wwc-confirm-reject',

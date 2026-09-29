@@ -6,7 +6,7 @@
  * rejection carries a reason so the admin can see why the catalogue is thin.
  */
 import { config } from '../config.js';
-import { resolveProductCategory, isLikelyMedicine } from '../products/category.js';
+import { isMedicineProduct, productShelf } from '../products/category-map.js';
 import { normalizeQuery } from '../search/normalize.js';
 import type { Product } from '../types.js';
 import type { CustomerProfile } from './profile.js';
@@ -15,6 +15,8 @@ export type IneligibilityReason =
   | 'out_of_stock'
   | 'not_verified'
   | 'category_mismatch'
+  | 'type_mismatch'
+  | 'label_conflict'
   | 'not_ideal_for_conflict'
   | 'avoided_ingredient'
   | 'fragrance_conflict'
@@ -93,29 +95,43 @@ export function checkEligibility(
     : ['verified'];
   if (!acceptable.includes(product.verification_status)) reasons.push('not_verified');
 
-  // 3. Category and use-area match.
-  const productCategory = resolveProductCategory({
-    categories: product.categories,
-    tags: product.tags,
-    name: product.name,
-  });
-  if (productCategory !== profile.category) reasons.push('category_mismatch');
+  // 3. Product type — the strictest check there is. When the customer asked
+  // for specific types ("shampoo"), a product of any other type is wrong
+  // however well it matches the concern, and an untyped product can't be
+  // shown to be right. The shelf check is then redundant (a type implies its
+  // shelf) and skipped, so a request spanning shelves — face and body
+  // sunscreen — isn't cut in half by it.
+  const wantedTypes = profile.product_types ?? [];
+  if (wantedTypes.length > 0) {
+    if (!product.product_type || !wantedTypes.includes(product.product_type)) reasons.push('type_mismatch');
+  } else {
+    // 3a. Shelf match — from the product's type, the admin's category map,
+    // or (unmapped categories only) the old keyword guess.
+    if (productShelf(product) !== profile.category) reasons.push('category_mismatch');
 
-  // 3a. Medicines are findable and purchasable by name (`search_products`)
-  // but never ranked into a recommendation. The data needed to do that
-  // accurately — indication, dose, contraindications, interactions — is
-  // deliberately never collected by labeling, so a ranked suggestion here
-  // would be built entirely from null fields. See `isLikelyMedicine()`.
-  // Scoped to `general`: a vitamins-shelf product with a strength in its
-  // name is a supplement, not a medicine, and stays recommendable.
-  if (
-    productCategory === 'general' &&
-    isLikelyMedicine({ categories: product.categories, tags: product.tags, name: product.name })
-  ) {
-    reasons.push('medicine');
+    // Something swallowed never answers a hair, face or body request, even
+    // when it was filed under "Hair Care".
+    if (
+      (profile.category === 'hair' || profile.category === 'face' || profile.category === 'body') &&
+      product.application === 'oral_ingested'
+    ) {
+      reasons.push('type_mismatch');
+    }
   }
 
-  // 3b. Confidence floor. A product labeled from a bare title — no
+  // 3b. The labelling sanity check found a contradiction (the name says
+  // "shampoo", the type says otherwise). Held back until an admin confirms
+  // the type on the Accuracy screen — a wrong type is the one mistake a
+  // customer spots instantly.
+  if ((product.label_issues ?? []).length > 0) reasons.push('label_conflict');
+
+  // 3c. Medicines are findable and purchasable by name (`search_products`)
+  // but never ranked into a recommendation, on any shelf. The data needed to
+  // do that accurately — indication, dose, contraindications, interactions —
+  // is deliberately never collected by labeling. See `isMedicineProduct()`.
+  if (isMedicineProduct(product)) reasons.push('medicine');
+
+  // 3d. Confidence floor. A product labeled from a bare title — no
   // description, no attributes — comes back with mostly-null fields and a
   // low self-reported confidence, yet still lands as `verified`. Recommending
   // it is how the catalogue produces confident-looking but baseless matches,
@@ -150,8 +166,8 @@ export function checkEligibility(
   // 5. Ingredients and formulation the customer asked to avoid.
   const haystack = textOf(product);
   for (const avoid of profile.avoid) {
-    const terms = AVOID_TERMS[avoid];
-    if (!terms) continue;
+    // A free-text avoid ("parabens") outside the known groups is matched as written.
+    const terms = AVOID_TERMS[avoid] ?? [avoid.replace(/_/g, ' ')];
     if (terms.some((t) => haystack.includes(normalizeQuery(t)))) {
       reasons.push('avoided_ingredient');
       break;

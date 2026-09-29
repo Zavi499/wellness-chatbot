@@ -7,6 +7,7 @@
  * recommendation is a defect, not a feature.
  */
 import { normalizeQuery } from '../search/normalize.js';
+import { labelMatches } from './match.js';
 import type { Product } from '../types.js';
 import type { CustomerProfile } from './profile.js';
 
@@ -33,13 +34,13 @@ export interface ScoredProduct {
 /** Reviews only count once there are enough of them to mean anything (§4.6). */
 const MIN_REVIEWS_TO_COUNT = 5;
 
+/**
+ * Whether a label list says what the customer asked for — through the
+ * lexicon, so "dryness" matches a product labelled "dry skin" (see
+ * `match.ts`). A superset of the old plain substring test.
+ */
 function listIncludes(list: string[], needle: string | null): boolean {
-  if (!needle) return false;
-  const target = normalizeQuery(needle.replace(/_/g, ' '));
-  return list.some((item) => {
-    const n = normalizeQuery(item);
-    return n.includes(target) || target.includes(n);
-  });
+  return labelMatches(list, needle);
 }
 
 function concernScore(product: Product, profile: CustomerProfile): number {

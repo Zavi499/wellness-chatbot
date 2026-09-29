@@ -56,6 +56,13 @@ function addMissingColumns(d: DatabaseSync): void {
   const wanted: Record<string, string> = {
     description_ar: 'TEXT',
     short_description_ar: 'TEXT',
+    category_paths_json: "TEXT NOT NULL DEFAULT '[]'",
+    woo_category_ids_json: "TEXT NOT NULL DEFAULT '[]'",
+    how_to_use_source_json: `TEXT NOT NULL DEFAULT '{"en":null,"ar":null}'`,
+    product_type: 'TEXT',
+    application: 'TEXT',
+    product_type_source: 'TEXT',
+    label_issues_json: "TEXT NOT NULL DEFAULT '[]'",
   };
   for (const [name, type] of Object.entries(wanted)) {
     if (!existing.has(name)) {

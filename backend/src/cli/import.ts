@@ -18,8 +18,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { normalizeWooProduct, type WooRawProduct } from '../products/normalize.js';
-import { allProducts, countProducts, deleteProduct, upsertWooFields } from '../products/repository.js';
+import { ingestWooProduct, type WooRawProduct } from '../products/normalize.js';
+import { allProducts, countProducts, deleteProduct } from '../products/repository.js';
 import { reindexProducts } from '../search/embeddings.js';
 
 function readProducts(filePath: string): WooRawProduct[] {
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
       skipped += 1;
       continue;
     }
-    upsertWooFields(normalizeWooProduct(product));
+    ingestWooProduct(product);
     upserted += 1;
     if (upserted % 100 === 0) process.stdout.write(`\r  imported ${upserted}/${products.length}…`);
   }

@@ -67,6 +67,7 @@ class WWC_Meta {
 			'_wwc_name_ar'                   => 'string',
 			'_wwc_synonyms_en'               => 'array',
 			'_wwc_synonyms_ar'               => 'array',
+			'_wwc_product_type'              => 'string',
 		);
 	}
 

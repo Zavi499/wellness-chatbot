@@ -74,6 +74,42 @@ function lexiconIndex(extra: LexiconEntry[] = []): { term: string; entry: Lexico
   return cachedIndex;
 }
 
+/** Arabic clitics that attach to the front of a word: و ب ل ف and the article ال. */
+const ARABIC_PREFIXES = ['', 'ال', 'و', 'وال', 'ب', 'بال', 'ل', 'لل', 'ف', 'فال'];
+
+/**
+ * Whether `term` occurs in `text` as whole words. Plain `includes()` let the
+ * two-letter synonym "ha" (hyaluronic acid) match inside "s-ha-mpoo", which
+ * quietly gave every shampoo query a skincare concept. Arabic terms may carry
+ * a prefix ("الشامبو", "وشامبو"), so those are allowed at the word start.
+ */
+export function containsTerm(text: string, term: string): boolean {
+  if (!term) return false;
+  const padded = ` ${text} `;
+  const isArabic = /[؀-ۿ]/.test(term);
+  const prefixes = isArabic ? ARABIC_PREFIXES : [''];
+  return prefixes.some((p) => padded.includes(` ${p}${term} `));
+}
+
+/**
+ * Words that say nothing about which product is wanted. Without this,
+ * "for", "skin", "suggest" and friends each counted as a keyword hit, so a
+ * face cream scored well on "suggest me a shampoo for dry skin".
+ */
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'you', 'your', 'me', 'my', 'some', 'any', 'something', 'suggest',
+  'recommend', 'need', 'want', 'looking', 'look', 'please', 'good', 'best', 'what', 'which', 'can',
+  'could', 'would', 'show', 'give', 'find', 'get', 'buy', 'have', 'has', 'product', 'products', 'use',
+  'from', 'that', 'this', 'there', 'are', 'is', 'it', 'its', 'one', 'also', 'very', 'really', 'help',
+  'في', 'من', 'على', 'الى', 'عن', 'مع', 'او', 'لي', 'اريد', 'ابي', 'ابغى', 'ابغي', 'ممكن', 'شي', 'شيء',
+  'افضل', 'منتج', 'منتجات', 'عندكم', 'عندك', 'اقترح', 'انصح', 'هل', 'ما', 'ماذا',
+]);
+
+/** Query tokens worth matching on. */
+export function contentTokens(normalized: string): string[] {
+  return normalized.split(' ').filter((t) => t.length > 2 && !STOPWORDS.has(t));
+}
+
 /**
  * Expands a raw customer query into canonical concepts plus synonym terms.
  * Deliberately conservative — it never rewrites the query the model sees, it
@@ -85,7 +121,7 @@ export function expandQuery(raw: string, extraLexicon: LexiconEntry[] = []): Nor
   const expanded = new Set<string>([normalized]);
 
   for (const { term, entry } of lexiconIndex(extraLexicon)) {
-    if (term && normalized.includes(term)) {
+    if (term && containsTerm(normalized, term)) {
       concepts.add(entry.canonical);
       for (const s of [...entry.synonyms_en, ...entry.synonyms_ar, entry.name_en, entry.name_ar]) {
         if (s) expanded.add(normalizeQuery(s));
@@ -105,16 +141,16 @@ export function expandQuery(raw: string, extraLexicon: LexiconEntry[] = []): Nor
 export function keywordScore(query: NormalizedQuery, text: string): number {
   const target = normalizeQuery(text);
   if (!target) return 0;
-  const tokens = new Set(query.normalized.split(' ').filter((t) => t.length > 2));
+  const tokens = new Set(contentTokens(query.normalized));
   if (tokens.size === 0) return 0;
 
   let hits = 0;
-  for (const token of tokens) if (target.includes(token)) hits += 1;
+  for (const token of tokens) if (containsTerm(target, token)) hits += 1;
   let score = hits / tokens.size;
 
   // A full synonym phrase match is stronger evidence than scattered tokens.
   for (const phrase of query.expanded) {
-    if (phrase.length > 3 && target.includes(phrase)) {
+    if (phrase.length > 3 && containsTerm(target, phrase)) {
       score = Math.max(score, 0.9);
       break;
     }

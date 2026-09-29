@@ -5,6 +5,7 @@
  */
 import type { AnswerMap } from '../types.js';
 import type { ProductCategory } from '../products/category.js';
+import { typesForQuestionnaireAnswer, type ProductType } from '../products/types.js';
 
 export type BudgetBand = 'low' | 'mid' | 'high' | 'any';
 export type SensitivityLevel = 'very' | 'somewhat' | 'not' | 'unknown';
@@ -12,6 +13,12 @@ export type SensitivityLevel = 'very' | 'somewhat' | 'not' | 'unknown';
 export interface CustomerProfile {
   category: ProductCategory;
   product_type: string | null;
+  /**
+   * The product types that satisfy this request — a hard filter, applied in
+   * eligibility. Empty means "any type on the shelf" (the customer said
+   * "not sure", or the shelf asks no type question).
+   */
+  product_types: ProductType[];
   /** skin type, scalp type, hair pattern/thickness — whatever the category asked. */
   types: string[];
   concern_primary: string | null;
@@ -63,6 +70,10 @@ export function buildProfile(category: ProductCategory, answers: AnswerMap): Cus
   return {
     category,
     product_type: asString(answers.product_type),
+    product_types: typesForQuestionnaireAnswer(category, {
+      product_type: asString(answers.product_type),
+      preferred_form: asString(answers.preferred_form),
+    }),
     types,
     concern_primary: asString(answers.concern_primary) ?? asString(answers.goal),
     concern_secondary: asString(answers.concern_secondary),

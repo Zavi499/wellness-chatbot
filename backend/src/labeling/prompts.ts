@@ -6,10 +6,46 @@
  */
 import type { ProductCategory } from '../products/category.js';
 import { CATEGORY_LABELS } from '../products/category.js';
+import { typeGlossary } from '../products/types.js';
 
-const SHARED_SYSTEM = `You are labeling a product for a wellness e-commerce
-catalogue in Kuwait. Using ONLY the product name, description, and attributes
-provided, output a JSON object matching the given schema.
+const SHARED_SYSTEM = `You are labeling a product for a pharmacy and wellness
+e-commerce catalogue in Kuwait. You are given six things from the store's own
+data: the product NAME, its store CATEGORIES, its store TAGS, its DESCRIPTION,
+its INGREDIENTS and its HOW TO USE. Using ONLY those, output a JSON object
+matching the given schema. Customers are recommended products from these
+labels, so a wrong label means a wrong product in front of a customer.
+
+PRODUCT TYPE — the most important field. Choose what the product physically
+IS from this fixed list:
+${typeGlossary()}
+
+Decide it from the NAME first, then HOW TO USE, then CATEGORIES, then the
+DESCRIPTION.
+- Choose the functional type, not the audience: a baby shampoo is "shampoo",
+  a men's face wash is "cleanser", a kids' toothpaste is "oral_care".
+- Anything swallowed — tablets, capsules, softgels, gummies, sachets, syrups,
+  drinkable ampoules, drops taken by mouth — is a supplement_* type or
+  "medicine". Never a skin, hair or body type, even when it is "for hair",
+  "for skin" or "for nails".
+- A medicine (antibiotic, painkiller, prescription or pharmacy-only drug,
+  anything with an active pharmaceutical ingredient and a strength) is
+  "medicine" whatever its form, including medicated creams and drops.
+- A set of several different products sold together is "gift_set".
+- Use "other" only when nothing on the list fits.
+Set "application" to where it is used; for anything swallowed it is
+"oral_ingested".
+
+EVIDENCE
+- Concerns and suitable types must come from what the six fields say, not
+  from what products of this type usually do. A shampoo whose text never
+  mentions dryness is not labelled for dryness.
+- When INGREDIENTS is given it is authoritative: take key_ingredients from it
+  (the headline actives, exact spelling) and judge fragrance and alcohol from
+  it.
+- When HOW TO USE is given, how_to_use must restate it faithfully in at most
+  two sentences — do not add steps it does not contain.
+- Categories and tags are the store's own filing: strong hints about type and
+  use, but a product can be misfiled — the name wins over a category.
 
 Hard rules:
 - If a field cannot be determined from the provided text, output null (or an
@@ -79,34 +115,57 @@ export function labelingSystemPrompt(category: ProductCategory): string {
 export interface LabelingInput {
   name: string;
   category: ProductCategory;
-  categoryNames: string[];
+  /** Full paths where known ("Hair Care > Shampoo"); each is a separate category. */
+  categoryPaths: string[];
+  tags: string[];
   description: string | null;
   shortDescription: string | null;
-  attributes: string | null;
   ingredientsRaw: string | null;
+  howToUse: string | null;
   brand: string | null;
+  /** Set when the admin's category map fixes this product's type. */
+  fixedType?: string | null;
   /** A real, human WPML translation — not previously AI-generated output. */
   existingNameAr?: string | null;
   existingDescriptionAr?: string | null;
 }
 
+/** Long HTML-heavy descriptions add cost without adding facts past this point. */
+const MAX_FIELD_CHARS = 6000;
+
+function clip(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const t = text.trim();
+  if (t === '') return null;
+  return t.length > MAX_FIELD_CHARS ? `${t.slice(0, MAX_FIELD_CHARS)} …` : t;
+}
+
 export function labelingUserPrompt(input: LabelingInput): string {
   const label = CATEGORY_LABELS[input.category].en;
   const lines = [
-    `Product name: ${input.name}`,
-    `Brand: ${input.brand ?? '(not specified)'}`,
-    `Category: ${label} (store taxonomy: ${input.categoryNames.join(' > ') || 'n/a'})`,
-    `Short description: ${input.shortDescription ?? '(none)'}`,
-    `Description: ${input.description ?? '(none)'}`,
-    `Attributes: ${input.attributes ?? '(none)'}`,
-    `Full ingredient list (if available): ${input.ingredientsRaw ?? '(none)'}`,
+    `NAME: ${input.name}`,
+    `BRAND: ${input.brand ?? '(not specified)'}`,
+    `STORE CATEGORIES (each line is a separate category the product is filed in):`,
+    ...(input.categoryPaths.length ? input.categoryPaths.map((c) => `  - ${c}`) : ['  (none)']),
+    `STORE TAGS: ${input.tags.length ? input.tags.join(', ') : '(none)'}`,
+    `SHORT DESCRIPTION: ${clip(input.shortDescription) ?? '(none)'}`,
+    `DESCRIPTION: ${clip(input.description) ?? '(none)'}`,
+    `INGREDIENTS (store's own field): ${clip(input.ingredientsRaw) ?? '(not provided)'}`,
+    `HOW TO USE (store's own field): ${clip(input.howToUse) ?? '(not provided)'}`,
+    '',
+    `Shelf this product is being labelled for: ${label}.`,
   ];
+  if (input.fixedType) {
+    lines.push(
+      `The store has confirmed every product in this category is of type "${input.fixedType}". Use that product_type unless the NAME clearly says otherwise.`,
+    );
+  }
   if (input.existingNameAr || input.existingDescriptionAr) {
     lines.push(
       '',
       'This product already has a human (not machine) Arabic translation — reuse its exact terminology and phrasing for any Arabic output rather than translating the English text yourself:',
       `Existing Arabic name: ${input.existingNameAr ?? '(none)'}`,
-      `Existing Arabic description: ${input.existingDescriptionAr ?? '(none)'}`,
+      `Existing Arabic description: ${clip(input.existingDescriptionAr) ?? '(none)'}`,
     );
   }
   return lines.join('\n');

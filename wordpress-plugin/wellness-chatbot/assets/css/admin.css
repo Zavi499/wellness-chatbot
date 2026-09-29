@@ -421,3 +421,31 @@
 	display: inline-block;
 	max-width: 420px;
 }
+
+/* --- Recommendation Accuracy screen ---------------------------------------- */
+.wwc-steps {
+	margin-left: 1.5em;
+}
+
+.wwc-steps li {
+	margin-bottom: 4px;
+}
+
+.wwc-category-map select {
+	max-width: 100%;
+}
+
+.wwc-filter-bar {
+	margin: 8px 0 12px;
+}
+
+#wwc-test-result .wwc-card {
+	margin: 12px 0;
+}
+
+#wwc-test-result blockquote {
+	margin: 8px 0;
+	padding: 8px 12px;
+	border-left: 3px solid #c3c4c7;
+	background: #fff;
+}

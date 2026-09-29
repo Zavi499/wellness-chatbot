@@ -72,6 +72,15 @@ CREATE TABLE IF NOT EXISTS products (
   synonyms_en_json           TEXT NOT NULL DEFAULT '[]',
   synonyms_ar_json           TEXT NOT NULL DEFAULT '[]',
 
+  -- Accuracy fields (see products/types.ts)
+  category_paths_json        TEXT NOT NULL DEFAULT '[]',
+  woo_category_ids_json      TEXT NOT NULL DEFAULT '[]',
+  how_to_use_source_json     TEXT NOT NULL DEFAULT '{"en":null,"ar":null}',
+  product_type               TEXT,
+  application                TEXT,
+  product_type_source        TEXT,
+  label_issues_json          TEXT NOT NULL DEFAULT '[]',
+
   updated_at                 TEXT NOT NULL DEFAULT (datetime('now')),
   synced_at                  TEXT
 );
@@ -79,6 +88,25 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE INDEX IF NOT EXISTS idx_products_stock  ON products(stock_status);
 CREATE INDEX IF NOT EXISTS idx_products_status ON products(verification_status);
 CREATE INDEX IF NOT EXISTS idx_products_conf   ON products(ai_confidence);
+
+-- --- WooCommerce category → shelf mapping ------------------------------------
+-- One row per WooCommerce product category, upserted on every sync. `shelf`
+-- and `fixed_product_type` are the admin's decision; the `suggested_*`
+-- columns are the AI's, used until an admin saves a row. This is what decides
+-- a product's shelf now — not keyword guessing over category names.
+CREATE TABLE IF NOT EXISTS category_map (
+  woo_category_id          INTEGER PRIMARY KEY,
+  name                     TEXT NOT NULL,
+  slug                     TEXT,
+  parent_id                INTEGER,
+  path                     TEXT,
+  shelf                    TEXT,     -- face|hair|body|vitamins|general|medicine|none
+  fixed_product_type       TEXT,
+  suggested_shelf          TEXT,
+  suggested_product_type   TEXT,
+  updated_at               TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_by               TEXT
+);
 
 -- --- Label review workflow --------------------------------------------------
 -- One row per AI labeling run. The draft never writes `verified` — only a human

@@ -366,6 +366,7 @@ class WWC_Admin_Labels {
 	 */
 	private static function render_fields( $product_id, array $draft ) {
 		$fields = array(
+			'product_type'       => __( 'Product type (key, e.g. shampoo)', 'wellness-chatbot' ),
 			'name_ar'            => __( 'Arabic name', 'wellness-chatbot' ),
 			'concern_primary'    => __( 'Main concerns', 'wellness-chatbot' ),
 			'concern_secondary'  => __( 'Secondary concerns', 'wellness-chatbot' ),
@@ -418,6 +419,7 @@ class WWC_Admin_Labels {
 
 	private static function current_value( $product_id, $key ) {
 		$map = array(
+			'product_type'      => '_wwc_product_type',
 			'name_ar'           => '_wwc_name_ar',
 			'concern_primary'   => '_wwc_concern_primary_en',
 			'concern_secondary' => '_wwc_concern_secondary_en',
@@ -568,6 +570,7 @@ class WWC_Admin_Labels {
 	 */
 	private static function mirror_to_meta( $product_id, array $edits, $status ) {
 		$simple = array(
+			'product_type'    => '_wwc_product_type',
 			'name_ar'         => '_wwc_name_ar',
 			'fragrance'       => '_wwc_fragrance',
 			'alcohol'         => '_wwc_alcohol',

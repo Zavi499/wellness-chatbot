@@ -23,6 +23,8 @@ function product(overrides: Partial<Product> = {}): Product {
     short_description: null,
     description: null,
     categories: ['Face Care'],
+    category_paths: ['Face Care'],
+    woo_category_ids: [],
     tags: [],
     brand: `Brand ${id}`,
     price: 10,
@@ -33,6 +35,7 @@ function product(overrides: Partial<Product> = {}): Product {
     stock_status: 'instock',
     rating_average: null,
     rating_count: 0,
+    how_to_use_source: { en: null, ar: null },
     verification_status: 'verified',
     ai_generated: false,
     ai_confidence: null,
@@ -63,6 +66,10 @@ function product(overrides: Partial<Product> = {}): Product {
     source_verification_note: null,
     synonyms_en: [],
     synonyms_ar: [],
+    product_type: 'serum',
+    application: 'face',
+    product_type_source: 'ai',
+    label_issues: [],
     updated_at: new Date().toISOString(),
     ...overrides,
   };
@@ -87,6 +94,7 @@ const generalProfile = buildProfile('general', {
 function generalProduct(overrides: Partial<Product> = {}): Product {
   return product({
     categories: ['Makeup'],
+    product_type: 'makeup',
     concern_primary: { en: ['lip colour'], ar: [] },
     suitable_types: { en: ['daily use'], ar: [] },
     routine_step: null,
@@ -119,13 +127,15 @@ describe('general category eligibility', () => {
   });
 
   test('a supplement with a strength in its name stays recommendable on the vitamins shelf', () => {
-    // The medicine rule is scoped to `general` precisely so this case — which
-    // matches the same strength+form pattern — is unaffected.
+    // The name matches the medicine heuristic (strength + dosage form), but a
+    // supplement type means it is not a medicine.
     const vitaminsProfile = buildProfile('vitamins', { concern_primary: 'immunity', budget: 'mid' });
     const result = checkEligibility(
       product({
         name: 'Vitamin C 500mg Tablets',
         categories: ['Vitamins & Supplements'],
+        product_type: 'supplement_tablet',
+        application: 'oral_ingested',
         concern_primary: { en: ['immunity'], ar: [] },
         suitable_types: { en: [], ar: [] },
       }),
@@ -253,7 +263,14 @@ describe('eligibility (§3.4)', () => {
   });
 
   test('rejects a product from another category', () => {
-    const result = checkEligibility(product({ categories: ['Hair & Scalp'], tags: [] }), profile);
+    // Untyped: the shelf falls back to the category.
+    const result = checkEligibility(product({ categories: ['Hair & Scalp'], tags: [], product_type: null }), profile);
+    assert.ok(result.reasons.includes('category_mismatch'));
+  });
+
+  test("a product's type decides its shelf over the category it was filed in", () => {
+    // A shampoo misfiled under Face Care is still a hair product.
+    const result = checkEligibility(product({ categories: ['Face Care'], product_type: 'shampoo' }), profile);
     assert.ok(result.reasons.includes('category_mismatch'));
   });
 });

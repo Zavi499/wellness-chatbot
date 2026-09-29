@@ -36,6 +36,7 @@ class WWC_Admin_Settings {
 
 		self::render_connection();
 		self::render_business();
+		self::render_product_fields();
 		self::render_widget();
 		self::render_models();
 
@@ -138,6 +139,79 @@ class WWC_Admin_Settings {
 			printf( '<p class="description">%s</p>', esc_html( $field['help'] ) );
 			if ( '' === trim( $value ) && 'currency' !== $key ) {
 				printf( '<p class="wwc-flag wwc-flag-warn">%s</p>', esc_html__( 'not confirmed yet', 'wellness-chatbot' ) );
+			}
+			echo '</td></tr>';
+		}
+		echo '</tbody></table>';
+	}
+
+	/**
+	 * Which ACF fields hold Ingredients and How to use. Both are sent to the
+	 * backend with every product and used for AI labelling.
+	 */
+	private static function render_product_fields() {
+		echo '<h2>' . esc_html__( 'Product data fields', 'wellness-chatbot' ) . '</h2>';
+		echo '<p class="description">' . esc_html__( 'The AI labels each product from its name, categories, tags, description, and these two custom fields. Pick the field that holds each one. After changing them, resync your products from the Recommendation Accuracy screen.', 'wellness-chatbot' ) . '</p>';
+
+		$acf = WWC_Product_Fields::acf_fields();
+		if ( empty( $acf ) ) {
+			echo '<p class="wwc-flag wwc-flag-warn">' . esc_html__( 'No ACF fields were found on products. If your fields use another plugin, type the meta key instead.', 'wellness-chatbot' ) . '</p>';
+		}
+
+		$rows = array(
+			'ingredients' => array(
+				'label'  => __( 'Ingredients field', 'wellness-chatbot' ),
+				'option' => WWC_Product_Fields::OPTION_INGREDIENTS,
+			),
+			'how_to_use'  => array(
+				'label'  => __( 'How to use field', 'wellness-chatbot' ),
+				'option' => WWC_Product_Fields::OPTION_HOW_TO_USE,
+			),
+		);
+
+		echo '<table class="form-table" role="presentation"><tbody>';
+		foreach ( $rows as $which => $row ) {
+			$stored  = (string) get_option( $row['option'], '' );
+			$current = WWC_Product_Fields::field_name( $which );
+			$id      = 'wwc_field_' . $which;
+
+			printf( '<tr><th scope="row"><label for="%s">%s</label></th><td>', esc_attr( $id ), esc_html( $row['label'] ) );
+
+			if ( ! empty( $acf ) ) {
+				printf( '<select id="%1$s" name="field_%2$s">', esc_attr( $id ), esc_attr( $which ) );
+				printf( '<option value="">%s</option>', esc_html__( 'Detect automatically', 'wellness-chatbot' ) );
+				printf( '<option value="%s"%s>%s</option>', esc_attr( WWC_Product_Fields::NONE ), selected( $stored, WWC_Product_Fields::NONE, false ), esc_html__( 'None — the store has no such field', 'wellness-chatbot' ) );
+				foreach ( $acf as $name => $label ) {
+					printf(
+						'<option value="%s"%s>%s (%s)</option>',
+						esc_attr( $name ),
+						selected( $stored, $name, false ),
+						esc_html( $label ),
+						esc_html( $name )
+					);
+				}
+				echo '</select>';
+			} else {
+				printf(
+					'<input type="text" id="%1$s" name="field_%2$s" class="regular-text" value="%3$s" placeholder="meta_key" />',
+					esc_attr( $id ),
+					esc_attr( $which ),
+					esc_attr( WWC_Product_Fields::NONE === $stored ? '' : $stored )
+				);
+			}
+
+			if ( '' === $current ) {
+				printf( '<p class="wwc-flag wwc-flag-warn">%s</p>', esc_html__( 'No field in use — the AI labels without it.', 'wellness-chatbot' ) );
+			} else {
+				$sample = WWC_Product_Fields::sample( $current );
+				printf(
+					'<p class="description">%s <code>%s</code>%s</p>',
+					esc_html( '' === $stored ? __( 'Detected:', 'wellness-chatbot' ) : __( 'Using:', 'wellness-chatbot' ) ),
+					esc_html( $current ),
+					'' === $sample
+						? ' — ' . esc_html__( 'no product has a value in this field yet', 'wellness-chatbot' )
+						: ' — ' . esc_html__( 'e.g.', 'wellness-chatbot' ) . ' “' . esc_html( $sample ) . '…”'
+				);
 			}
 			echo '</td></tr>';
 		}
@@ -389,6 +463,14 @@ class WWC_Admin_Settings {
 		}
 		if ( isset( $_POST['shared_secret'] ) && ! WWC_Settings::secret_in_config() ) {
 			update_option( WWC_Settings::OPTION_SHARED_SECRET, sanitize_text_field( wp_unslash( $_POST['shared_secret'] ) ) );
+		}
+
+		foreach ( array( 'ingredients' => WWC_Product_Fields::OPTION_INGREDIENTS, 'how_to_use' => WWC_Product_Fields::OPTION_HOW_TO_USE ) as $which => $option ) {
+			if ( isset( $_POST[ 'field_' . $which ] ) ) {
+				$value = sanitize_text_field( wp_unslash( $_POST[ 'field_' . $which ] ) );
+				// Not sanitize_key(): that lowercases, and a meta key is case-sensitive.
+				update_option( $option, WWC_Product_Fields::NONE === $value ? WWC_Product_Fields::NONE : preg_replace( '/[^A-Za-z0-9_\-]/', '', $value ), false );
+			}
 		}
 
 		update_option( WWC_Settings::OPTION_AUTO_INJECT, empty( $_POST['auto_inject'] ) ? '0' : '1' );

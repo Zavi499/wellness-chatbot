@@ -14,18 +14,30 @@ import { db, nowIso, toJson } from '../db/index.js';
 import { openai, models } from '../openai/client.js';
 import { config } from '../config.js';
 import { getProduct, updateWwcFields, allProducts } from '../products/repository.js';
-import { resolveProductCategory, type ProductCategory } from '../products/category.js';
+import type { ProductCategory } from '../products/category.js';
+import { productShelf, resolveFromCategories } from '../products/category-map.js';
+import {
+  isApplication,
+  isProductType,
+  typeApplication,
+  type ProductApplication,
+  type ProductType,
+} from '../products/types.js';
 import { labelingSystemPrompt, labelingUserPrompt } from './prompts.js';
 import { LABEL_SCHEMAS, type LabelDraft } from './schemas.js';
 import { evaluatePharmacistGate } from './gate.js';
+import { productTypeIssues } from './sanity.js';
+import { reindexProduct } from '../search/embeddings.js';
 import { logAudit } from '../analytics/audit.js';
-import type { Product } from '../types.js';
+import type { Bilingual, Product } from '../types.js';
 
 export interface LabelRunResult {
   product_id: number;
   draft_id: number;
   category: ProductCategory;
   confidence: number;
+  product_type: ProductType | null;
+  label_issues: string[];
   requires_pharmacist_review: boolean;
   gate_reasons: string[];
 }
@@ -52,6 +64,7 @@ function gateText(product: Product, draft: LabelDraft): string {
 async function callLabelingModel(
   product: Product,
   category: ProductCategory,
+  fixedType: ProductType | null,
 ): Promise<{ draft: LabelDraft; model: string }> {
   const model = models.label();
   const response = await openai().chat.completions.create({
@@ -63,12 +76,14 @@ async function callLabelingModel(
         content: labelingUserPrompt({
           name: product.name,
           category,
-          categoryNames: product.categories,
+          categoryPaths: product.category_paths.length ? product.category_paths : product.categories,
+          tags: product.tags,
           description: product.description,
           shortDescription: product.short_description,
-          attributes: product.tags.length ? product.tags.join(', ') : null,
           ingredientsRaw: product.full_ingredients,
+          howToUse: product.how_to_use_source.en,
           brand: product.brand,
+          fixedType,
           existingNameAr: product.name_ar,
           existingDescriptionAr: product.description_ar,
         }),
@@ -96,6 +111,49 @@ async function callLabelingModel(
   return { draft, model };
 }
 
+export interface TypeDecision {
+  product_type: ProductType | null;
+  application: ProductApplication | null;
+  source: 'ai' | 'category' | 'admin';
+  issues: string[];
+}
+
+/**
+ * Settles a product's type, most authoritative source first: an admin's own
+ * correction is never overwritten by a relabel; a category the admin mapped
+ * to a fixed type ("Shampoos" → shampoo) beats the model; the model decides
+ * everything else. The result is then checked against the product's name —
+ * see `sanity.ts` — except when an admin set it, since that IS the check.
+ */
+export function decideType(
+  product: Pick<Product, 'name' | 'product_type' | 'product_type_source'>,
+  draft: Pick<LabelDraft, 'product_type' | 'application'>,
+  fixedType: ProductType | null,
+): TypeDecision {
+  if (product.product_type_source === 'admin' && product.product_type) {
+    return {
+      product_type: product.product_type,
+      application: typeApplication(product.product_type) ?? (isApplication(draft.application) ? draft.application : null),
+      source: 'admin',
+      issues: [],
+    };
+  }
+
+  const type = fixedType ?? (isProductType(draft.product_type) ? draft.product_type : null);
+  const application = type
+    ? (typeApplication(type) ?? (isApplication(draft.application) ? draft.application : null))
+    : isApplication(draft.application)
+      ? draft.application
+      : null;
+
+  return {
+    product_type: type,
+    application,
+    source: fixedType ? 'category' : 'ai',
+    issues: productTypeIssues(product.name, type),
+  };
+}
+
 /**
  * Converts the model's draft into a `_wwc_*` patch. `verification_status`
  * goes straight to `verified` — direct labeling, no review step, by explicit
@@ -116,10 +174,26 @@ export function draftToPatch(
   confidence: number,
   requiresReview: boolean,
   existingNameAr: string | null = null,
+  extra: { typing?: TypeDecision; howToUseSource?: Bilingual } = {},
 ) {
   const empty = { en: [] as string[], ar: [] as string[] };
+  // The store's own How-to-use field is the source of truth for the card —
+  // copied verbatim, with the model's text only filling a side that is empty.
+  const source = extra.howToUseSource;
+  const howToUse =
+    source && (source.en || source.ar)
+      ? { en: source.en ?? draft.how_to_use?.en ?? null, ar: source.ar ?? draft.how_to_use?.ar ?? null }
+      : (draft.how_to_use ?? { en: null, ar: null });
   return {
     ...(existingNameAr ? {} : { name_ar: draft.name_ar ?? null }),
+    ...(extra.typing
+      ? {
+          product_type: extra.typing.product_type,
+          application: extra.typing.application,
+          product_type_source: extra.typing.source,
+          label_issues: extra.typing.issues,
+        }
+      : {}),
     concern_primary: draft.concern_primary ?? empty,
     concern_secondary: draft.concern_secondary ?? empty,
     suitable_types: draft.suitable_types ?? empty,
@@ -130,7 +204,7 @@ export function draftToPatch(
     fragrance_type: draft.fragrance_type ?? null,
     alcohol: draft.alcohol ?? 'unspecified',
     alcohol_type: draft.alcohol_type ?? null,
-    how_to_use: draft.how_to_use ?? { en: null, ar: null },
+    how_to_use: howToUse,
     routine_step: draft.routine_step ?? null,
     routine_time: draft.routine_time ?? null,
     age_suitability: draft.age_suitability ?? 'all',
@@ -186,7 +260,20 @@ const RESET_PATCH = {
   ai_confidence: null,
   requires_pharmacist_review: false,
   verification_status: 'unverified' as const,
+  product_type: null,
+  application: null,
+  product_type_source: null,
+  label_issues: [],
 } as const;
+
+/** What a reset leaves alone: an admin-confirmed type is a human decision, like a verified label. */
+const RESET_PATCH_KEEP_TYPE = (() => {
+  const { product_type: _t, application: _a, product_type_source: _s, ...rest } = RESET_PATCH;
+  void _t;
+  void _a;
+  void _s;
+  return rest;
+})();
 
 export async function labelProduct(productId: number): Promise<LabelRunResult> {
   const product = getProduct(productId);
@@ -197,20 +284,16 @@ export async function labelProduct(productId: number): Promise<LabelRunResult> {
     throw new Error(`Product ${productId} is human-verified; re-labeling would overwrite verified data.`);
   }
 
-  const category = resolveProductCategory({
-    categories: product.categories,
-    tags: product.tags,
-    name: product.name,
-  });
+  // The shelf decides which schema and category notes the model gets. It
+  // comes from the admin's category map (keyword guessing only for an
+  // unmapped category); the product's own type is not known yet — unless an
+  // admin already set it, which is then the best evidence there is.
+  const category = productShelf(product, { ignoreType: product.product_type_source !== 'admin' });
+  const fixedType = resolveFromCategories(product.woo_category_ids).fixedType;
 
-  // There is no longer an "unresolved category" branch here: anything that
-  // doesn't match a consultative shelf resolves to `general` (see
-  // `resolveProductCategory`). Previously such products were written back as
-  // ai_generated + unverified with an empty draft, which left them both
-  // permanently stuck in the review queue AND permanently ineligible for a
-  // re-run — nothing a human could actually resolve.
-  const { draft, model } = await callLabelingModel(product, category);
+  const { draft, model } = await callLabelingModel(product, category, fixedType);
   const confidence = clampConfidence(draft.confidence);
+  const typing = decideType(product, draft, fixedType);
 
   const gate = evaluatePharmacistGate({
     category,
@@ -218,7 +301,13 @@ export async function labelProduct(productId: number): Promise<LabelRunResult> {
     modelFlaggedSensitive: draft.mentions_sensitive_topic === true,
   });
 
-  updateWwcFields(productId, draftToPatch(draft, confidence, gate.requiresPharmacistReview, product.name_ar));
+  updateWwcFields(
+    productId,
+    draftToPatch(draft, confidence, gate.requiresPharmacistReview, product.name_ar, {
+      typing,
+      howToUseSource: product.how_to_use_source,
+    }),
+  );
 
   const draftId = insertDraft(productId, category, draft, confidence, model, true);
 
@@ -227,14 +316,32 @@ export async function labelProduct(productId: number): Promise<LabelRunResult> {
     entityId: String(productId),
     action: 'ai_labeled_auto_verified',
     actor: `openai:${model}`,
-    detail: { confidence, category, gate_reasons: gate.reasons },
+    detail: {
+      confidence,
+      category,
+      product_type: typing.product_type,
+      type_source: typing.source,
+      label_issues: typing.issues,
+      gate_reasons: gate.reasons,
+    },
   });
+
+  // Re-embed straight away: search reads the labels (type, concerns,
+  // ingredients), and an index built before labelling knows none of them.
+  const updated = getProduct(productId);
+  if (updated) {
+    reindexProduct(updated).catch((err) => {
+      console.warn(`[labeling] re-embedding product ${productId} failed:`, err instanceof Error ? err.message : err);
+    });
+  }
 
   return {
     product_id: productId,
     draft_id: draftId,
     category,
     confidence,
+    product_type: typing.product_type,
+    label_issues: typing.issues,
     requires_pharmacist_review: gate.requiresPharmacistReview,
     gate_reasons: gate.reasons,
   };
@@ -342,11 +449,13 @@ export function resetUnreviewedLabels(
   conn: DatabaseSync = db(),
 ): { products_reset: number; drafts_removed: number } {
   const targets = conn
-    .prepare(`SELECT product_id FROM products WHERE ai_generated = 1 AND verification_status = 'unverified'`)
-    .all() as { product_id: number }[];
+    .prepare(
+      `SELECT product_id, product_type_source FROM products WHERE ai_generated = 1 AND verification_status = 'unverified'`,
+    )
+    .all() as { product_id: number; product_type_source: string | null }[];
 
-  for (const { product_id } of targets) {
-    updateWwcFields(product_id, RESET_PATCH, conn);
+  for (const { product_id, product_type_source } of targets) {
+    updateWwcFields(product_id, product_type_source === 'admin' ? RESET_PATCH_KEEP_TYPE : RESET_PATCH, conn);
   }
 
   let draftsRemoved = 0;
@@ -393,13 +502,19 @@ export function resetAllAiLabels(
   options: { includeHumanVerified?: boolean } = {},
 ): { products_reset: number; drafts_removed: number } {
   const targets = options.includeHumanVerified
-    ? (conn.prepare(`SELECT product_id FROM products`).all() as { product_id: number }[])
+    ? (conn.prepare(`SELECT product_id, product_type_source FROM products`).all() as {
+        product_id: number;
+        product_type_source: string | null;
+      }[])
     : (conn
-        .prepare(`SELECT product_id FROM products WHERE ai_generated = 1`)
-        .all() as { product_id: number }[]);
+        .prepare(`SELECT product_id, product_type_source FROM products WHERE ai_generated = 1`)
+        .all() as { product_id: number; product_type_source: string | null }[]);
 
-  for (const { product_id } of targets) {
-    updateWwcFields(product_id, RESET_PATCH, conn);
+  // An admin-confirmed product type survives a reset unless the caller asked
+  // for a true fresh start — it is a human decision, like a verified label.
+  for (const { product_id, product_type_source } of targets) {
+    const keepType = product_type_source === 'admin' && !options.includeHumanVerified;
+    updateWwcFields(product_id, keepType ? RESET_PATCH_KEEP_TYPE : RESET_PATCH, conn);
   }
 
   let draftsRemoved = 0;
@@ -577,6 +692,17 @@ export function applyReview(
   const status = decision.status ?? 'verified';
 
   const patch: Record<string, unknown> = { ...(decision.edits ?? {}) };
+  if ('product_type' in patch) {
+    // A reviewer's type choice is an admin decision like any other — see
+    // setProductTypeByAdmin().
+    if (isProductType(patch.product_type)) {
+      patch.application = typeApplication(patch.product_type) ?? product.application;
+      patch.product_type_source = 'admin';
+      patch.label_issues = [];
+    } else {
+      delete patch.product_type;
+    }
+  }
   patch.verification_status = status;
   patch.ai_generated = false; // a human now owns these values
   patch.source_verification_date = nowIso().slice(0, 10);
@@ -608,4 +734,45 @@ export function applyReview(
   );
 
   return { product_id: productId, status };
+}
+
+/**
+ * An admin's product-type correction, from the Accuracy screen. Marked
+ * `admin` so no relabel or ordinary reset ever overwrites it, and clears any
+ * label issues — the admin looking at the product and choosing IS the
+ * resolution those issues were asking for.
+ */
+export function setProductTypeByAdmin(
+  productId: number,
+  type: ProductType,
+  actor: string | undefined,
+  conn: DatabaseSync = db(),
+): Product {
+  const product = getProduct(productId, conn);
+  if (!product) throw new Error(`Product ${productId} not found`);
+  const before = product.product_type;
+
+  updateWwcFields(
+    productId,
+    {
+      product_type: type,
+      application: typeApplication(type) ?? product.application,
+      product_type_source: 'admin',
+      label_issues: [],
+    },
+    conn,
+  );
+
+  logAudit(
+    {
+      entity: 'product',
+      entityId: String(productId),
+      action: 'product_type_set',
+      actor,
+      detail: { from: before, to: type },
+    },
+    conn,
+  );
+
+  return getProduct(productId, conn)!;
 }

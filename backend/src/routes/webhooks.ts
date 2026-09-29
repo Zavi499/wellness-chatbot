@@ -16,8 +16,8 @@
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
 import { verifyWooWebhook, verifySignature } from '../security/hmac.js';
-import { normalizeWooProduct, type WooRawProduct } from '../products/normalize.js';
-import { deleteProduct, getProduct, setStockStatus, upsertWooFields } from '../products/repository.js';
+import { ingestWooProduct, type WooRawProduct } from '../products/normalize.js';
+import { deleteProduct, getProduct, setStockStatus } from '../products/repository.js';
 import { reindexProduct } from '../search/embeddings.js';
 import { labelProduct } from '../labeling/pipeline.js';
 
@@ -56,7 +56,7 @@ function applyProduct(
   relabel: boolean,
   log: { warn: (obj: unknown, msg: string) => void },
 ): void {
-  upsertWooFields(normalizeWooProduct(raw));
+  ingestWooProduct(raw);
 
   const product = getProduct(raw.id);
   if (!product) return;

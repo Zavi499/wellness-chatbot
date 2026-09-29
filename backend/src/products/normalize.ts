@@ -15,7 +15,10 @@
  * full WordPress + WooCommerce boot on top of the push that triggered it.
  * Traffic is now one-directional: WordPress → backend, never the reverse.
  */
-import { upsertWooFields } from './repository.js';
+import type { DatabaseSync } from 'node:sqlite';
+import { db } from '../db/index.js';
+import { updateSourceFields, upsertWooFields } from './repository.js';
+import { upsertCategories } from './category-map.js';
 import type { Product } from '../types.js';
 
 export interface WooRawProduct {
@@ -42,11 +45,23 @@ export interface WooRawProduct {
   stock_status?: string;
   average_rating?: string;
   rating_count?: number;
-  categories?: { id: number; name: string; slug: string }[];
+  /**
+   * `parent` and `path` ("Hair Care > Shampoo") come from plugin builds that
+   * walk the term ancestors; older builds send id/name/slug only.
+   */
+  categories?: { id: number; name: string; slug: string; parent?: number | null; path?: string | null }[];
   tags?: { id: number; name: string; slug: string }[];
   images?: { src: string }[];
   attributes?: { name: string; options: string[] }[];
   meta_data?: { key: string; value: unknown }[];
+  /**
+   * The store's own "Ingredients" and "How to use" custom fields (ACF), as
+   * configured on the plugin's Settings screen. Absent entirely from older
+   * plugin builds — which is different from present-but-empty.
+   */
+  ingredients?: string | null;
+  how_to_use?: string | null;
+  how_to_use_ar?: string | null;
   weight?: string;
   dimensions?: { length?: string; width?: string; height?: string };
 }
@@ -114,6 +129,8 @@ export function normalizeWooProduct(raw: WooRawProduct): Parameters<typeof upser
     description: stripHtml(raw.description),
     description_ar: stripHtml(raw.description_ar),
     categories: (raw.categories ?? []).map((c) => c.name),
+    category_paths: (raw.categories ?? []).map((c) => c.path || c.name),
+    woo_category_ids: (raw.categories ?? []).map((c) => Number(c.id)).filter((id) => Number.isFinite(id) && id > 0),
     tags: (raw.tags ?? []).map((t) => t.name),
     brand: extractBrand(raw),
     price: toNumber(raw.price),
@@ -125,4 +142,32 @@ export function normalizeWooProduct(raw: WooRawProduct): Parameters<typeof upser
     rating_average: toNumber(raw.average_rating),
     rating_count: Number(raw.rating_count ?? 0),
   };
+}
+
+/**
+ * The one way a pushed WooCommerce product enters the backend — used by the
+ * save webhook, the bulk import route and the CLI importer alike. Writes the
+ * WooCommerce-owned columns, the store's custom fields (only when the payload
+ * carried them), and registers the product's categories in the category map.
+ */
+export function ingestWooProduct(raw: WooRawProduct, conn: DatabaseSync = db()): void {
+  upsertWooFields(normalizeWooProduct(raw), conn);
+
+  const source: Parameters<typeof updateSourceFields>[1] = {};
+  if (raw.ingredients !== undefined) source.full_ingredients = stripHtml(raw.ingredients ?? '');
+  if (raw.how_to_use !== undefined || raw.how_to_use_ar !== undefined) {
+    source.how_to_use_source = { en: stripHtml(raw.how_to_use ?? ''), ar: stripHtml(raw.how_to_use_ar ?? '') };
+  }
+  updateSourceFields(raw.id, source, conn);
+
+  upsertCategories(
+    (raw.categories ?? []).map((c) => ({
+      id: Number(c.id),
+      name: c.name,
+      slug: c.slug,
+      parent: c.parent ?? null,
+      path: c.path ?? null,
+    })),
+    conn,
+  );
 }

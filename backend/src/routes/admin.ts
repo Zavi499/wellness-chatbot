@@ -30,10 +30,11 @@ import {
   type SettingKey,
 } from '../settings/repository.js';
 import { listAvailableModels, models } from '../openai/client.js';
-import { normalizeWooProduct, type WooRawProduct } from '../products/normalize.js';
-import { allProducts, countProducts, deleteProduct, getProduct, upsertWooFields } from '../products/repository.js';
+import { ingestWooProduct, type WooRawProduct } from '../products/normalize.js';
+import { allProducts, countProducts, deleteProduct, getProduct } from '../products/repository.js';
 import { loadAllQuestionnaires, saveQuestionnaire, type QuestionnaireId } from '../questionnaire/loader.js';
 import { vectorCount } from '../search/vector.js';
+import { accuracyRoutes } from './accuracy.js';
 
 interface AdminIdentity {
   user: string;
@@ -314,7 +315,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       let upserted = 0;
       for (const product of body.products) {
         if (!product.id || !product.name) continue;
-        upsertWooFields(normalizeWooProduct(product));
+        ingestWooProduct(product);
         upserted += 1;
       }
 
@@ -361,6 +362,9 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     vectors: vectorCount(),
     missing_settings: missingSettings(),
   }));
+
+  // --- Recommendation accuracy (category map, product types, test a question)
+  await accuracyRoutes(app);
 
   // --- Version history ------------------------------------------------------
   app.get('/api/admin/audit', async (request) => {

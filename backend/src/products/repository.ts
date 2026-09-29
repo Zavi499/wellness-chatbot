@@ -5,6 +5,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { db, parseJson, toJson, nowIso } from '../db/index.js';
 import { config } from '../config.js';
+import { isApplication, isProductType } from './types.js';
 import type {
   AgeSuitability,
   Bilingual,
@@ -41,6 +42,8 @@ export function rowToProduct(row: Row): Product {
     description: (row.description as string) ?? null,
     description_ar: (row.description_ar as string) ?? null,
     categories: parseJson<string[]>(row.categories_json, []),
+    category_paths: parseJson<string[]>(row.category_paths_json, []),
+    woo_category_ids: parseJson<number[]>(row.woo_category_ids_json, []),
     tags: parseJson<string[]>(row.tags_json, []),
     brand: (row.brand as string) ?? null,
     price: row.price === null || row.price === undefined ? null : Number(row.price),
@@ -53,6 +56,7 @@ export function rowToProduct(row: Row): Product {
     rating_average:
       row.rating_average === null || row.rating_average === undefined ? null : Number(row.rating_average),
     rating_count: Number(row.rating_count ?? 0),
+    how_to_use_source: parseJson<Bilingual>(row.how_to_use_source_json, EMPTY_BILINGUAL),
 
     verification_status: (row.verification_status as VerificationStatus) ?? 'unverified',
     ai_generated: Number(row.ai_generated ?? 0) === 1,
@@ -86,6 +90,13 @@ export function rowToProduct(row: Row): Product {
     source_verification_note: (row.source_verification_note as string) ?? null,
     synonyms_en: parseJson<string[]>(row.synonyms_en_json, []),
     synonyms_ar: parseJson<string[]>(row.synonyms_ar_json, []),
+    product_type: isProductType(row.product_type) ? row.product_type : null,
+    application: isApplication(row.application) ? row.application : null,
+    product_type_source:
+      row.product_type_source === 'ai' || row.product_type_source === 'category' || row.product_type_source === 'admin'
+        ? row.product_type_source
+        : null,
+    label_issues: parseJson<string[]>(row.label_issues_json, []),
     updated_at: String(row.updated_at ?? ''),
   };
 }
@@ -94,11 +105,13 @@ const UPSERT = `
 INSERT INTO products (
   product_id, sku, name, name_ar, permalink, image_url, short_description, short_description_ar,
   description, description_ar, categories_json, tags_json, brand, price, regular_price, sale_price,
-  currency, size, stock_status, rating_average, rating_count, updated_at, synced_at
+  currency, size, stock_status, rating_average, rating_count, updated_at, synced_at,
+  category_paths_json, woo_category_ids_json
 ) VALUES (
   ?, ?, ?, ?, ?, ?, ?, ?,
   ?, ?, ?, ?, ?, ?, ?, ?,
-  ?, ?, ?, ?, ?, ?, ?
+  ?, ?, ?, ?, ?, ?, ?,
+  ?, ?
 )
 ON CONFLICT(product_id) DO UPDATE SET
   sku = excluded.sku,
@@ -116,6 +129,8 @@ ON CONFLICT(product_id) DO UPDATE SET
   description = excluded.description,
   description_ar = COALESCE(excluded.description_ar, products.description_ar),
   categories_json = excluded.categories_json,
+  category_paths_json = excluded.category_paths_json,
+  woo_category_ids_json = excluded.woo_category_ids_json,
   tags_json = excluded.tags_json,
   brand = excluded.brand,
   price = excluded.price,
@@ -163,7 +178,9 @@ export function upsertWooFields(
     | 'rating_average'
     | 'rating_count'
   > &
-    Partial<Pick<Product, 'name_ar' | 'description_ar' | 'short_description_ar'>>,
+    Partial<
+      Pick<Product, 'name_ar' | 'description_ar' | 'short_description_ar' | 'category_paths' | 'woo_category_ids'>
+    >,
   conn: DatabaseSync = db(),
 ): void {
   conn
@@ -192,7 +209,35 @@ export function upsertWooFields(
       p.rating_count,
       nowIso(),
       nowIso(),
+      toJson(p.category_paths ?? p.categories),
+      toJson(p.woo_category_ids ?? []),
     );
+}
+
+/**
+ * The store's own Ingredients and How-to-use custom fields (ACF). Written
+ * separately from `upsertWooFields()` because an older plugin build does not
+ * send them at all: a payload that simply lacks the keys must leave what is
+ * stored alone, while one that sends them empty must clear them. Callers
+ * pass only the keys the payload actually carried.
+ */
+export function updateSourceFields(
+  productId: number,
+  fields: { full_ingredients?: string | null; how_to_use_source?: Bilingual },
+  conn: DatabaseSync = db(),
+): void {
+  const sets: string[] = [];
+  const values: (string | null)[] = [];
+  if ('full_ingredients' in fields) {
+    sets.push('full_ingredients = ?');
+    values.push(fields.full_ingredients ?? null);
+  }
+  if (fields.how_to_use_source) {
+    sets.push('how_to_use_source_json = ?');
+    values.push(toJson(fields.how_to_use_source));
+  }
+  if (sets.length === 0) return;
+  conn.prepare(`UPDATE products SET ${sets.join(', ')} WHERE product_id = ?`).run(...values, productId);
 }
 
 /** Column names that the labeling pipeline and the admin review queue may write. */
@@ -228,6 +273,10 @@ const WWC_COLUMNS: Record<string, string> = {
   source_verification_note: 'source_verification_note',
   synonyms_en: 'synonyms_en_json',
   synonyms_ar: 'synonyms_ar_json',
+  product_type: 'product_type',
+  application: 'application',
+  product_type_source: 'product_type_source',
+  label_issues: 'label_issues_json',
 };
 
 const JSON_COLUMNS = new Set(Object.values(WWC_COLUMNS).filter((c) => c.endsWith('_json')));

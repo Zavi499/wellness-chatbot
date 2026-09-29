@@ -10,7 +10,9 @@ import { searchKb, answerIn, KB_FALLBACK } from '../kb/repository.js';
 import { searchProducts } from '../search/embeddings.js';
 import { buildProfile } from '../recommend/profile.js';
 import { selectTopThree, toRecommendationSet, toProductCards } from '../recommend/select.js';
+import { findProducts, typeOnlyNote, type FindRequest } from '../recommend/find.js';
 import { isProductCategory, type ProductCategory } from '../products/category.js';
+import { PRODUCT_TYPE_KEYS, typeLabel } from '../products/types.js';
 import { recordAnswer } from './session.js';
 import { logEvent } from '../analytics/audit.js';
 import type { Language, RecommendationSet, SessionState } from '../types.js';
@@ -59,7 +61,7 @@ export const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          category: { type: 'string', description: 'One of: face, body, hair, vitamins' },
+          category: { type: 'string', description: 'One of: face, body, hair, vitamins, general' },
           must_exclude_product_ids: {
             type: 'array',
             items: { type: 'integer' },
@@ -73,12 +75,55 @@ export const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
-      name: 'search_products',
+      name: 'find_products',
       description:
-        'Free-text/semantic search over the verified product catalog, e.g. when the customer names a specific product or brand rather than going through the questionnaire.',
+        'Find products for a need the customer describes in their own words — "a shampoo for dry scalp", "sunscreen for oily skin", "something for dandruff". ' +
+        'Translate the request into the structured fields below; the engine then returns ONLY products of the requested type(s), best need-match first. ' +
+        'product_types is required: pick what the customer physically wants. If they did not say (e.g. "something for dry skin"), ask one short question about the kind of product first instead of calling this.',
       parameters: {
         type: 'object',
-        properties: { query: { type: 'string' } },
+        properties: {
+          product_types: {
+            type: 'array',
+            items: { type: 'string', enum: PRODUCT_TYPE_KEYS },
+            description:
+              'Every type that satisfies the request, usually one. "shampoo" → ["shampoo"]; "sunscreen" → ["sunscreen","body_sunscreen"] only if they did not say face; "hair vitamins" → the supplement_* types. Never add a type the customer did not ask for.',
+          },
+          concerns: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              'What it is for, in English: dryness, dandruff, hair loss, acne, pigmentation, frizz, odour … Read the request in context: "dry skin" in a shampoo request means a dry scalp → ["dry scalp", "dryness"].',
+          },
+          for_types: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Types it must suit, in English: dry, oily, sensitive, curly, coloured, fine … Empty if not stated.',
+          },
+          ingredients_wanted: { type: 'array', items: { type: 'string' } },
+          ingredients_avoid: { type: 'array', items: { type: 'string' } },
+          fragrance_free: { type: 'boolean' },
+          budget: { type: 'string', enum: ['low', 'mid', 'high', 'any'] },
+          must_exclude_product_ids: {
+            type: 'array',
+            items: { type: 'integer' },
+            description: 'Products already shown that the customer asked to replace.',
+          },
+        },
+        required: ['product_types'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_products',
+      description:
+        'Look up a product the customer NAMES — a brand, a product name or a SKU ("CeraVe", "Nizoral shampoo", "do you have Bioderma Sensibio?"). ' +
+        'Not for needs: "a shampoo for dandruff" is find_products.',
+      parameters: {
+        type: 'object',
+        properties: { query: { type: 'string', description: 'The brand / product name as the customer wrote it.' } },
         required: ['query'],
       },
     },
@@ -209,6 +254,80 @@ function runGetRecommendations(
   };
 }
 
+const FIND_NOTES = {
+  need_type:
+    'No product type was given. Ask the customer ONE short question about what kind of product they want (e.g. a shampoo, a cream, a supplement), then call find_products again.',
+  medicine:
+    'Medicines are never recommended by this assistant. If the customer named a specific medicine, look it up with search_products; otherwise suggest they speak to one of our pharmacists. Do not describe what any medicine treats.',
+  none_of_type:
+    'The store has no recommendable product of this type right now. Say so plainly and warmly. Do NOT offer a different kind of product instead unless the customer asks; you may offer to connect them with the team.',
+} as const;
+
+function runFindProducts(args: FindRequest & { must_exclude_product_ids?: number[] }, ctx: ToolContext): ToolOutcome {
+  const request: FindRequest = {
+    product_types: Array.isArray(args.product_types) ? args.product_types : [],
+    concerns: Array.isArray(args.concerns) ? args.concerns : [],
+    for_types: Array.isArray(args.for_types) ? args.for_types : [],
+    ingredients_wanted: Array.isArray(args.ingredients_wanted) ? args.ingredients_wanted : [],
+    ingredients_avoid: Array.isArray(args.ingredients_avoid) ? args.ingredients_avoid : [],
+    fragrance_free: args.fragrance_free === true,
+    budget: args.budget,
+    exclude_ids: args.must_exclude_product_ids ?? [],
+  };
+
+  const found = findProducts(request);
+  const typeNames = found.types.map((t) => typeLabel(t, ctx.language));
+
+  if (!found.selection || found.selection.picks.length === 0) {
+    logEvent('recommendation_shown', ctx.session.session_id, {
+      product_ids: [],
+      source: 'find_products',
+      status: found.status,
+      types: found.types,
+    });
+    const note =
+      found.status === 'need_type' || found.status === 'medicine'
+        ? FIND_NOTES[found.status]
+        : FIND_NOTES.none_of_type;
+    return { result: JSON.stringify({ count: 0, status: found.status, requested_types: typeNames, note }) };
+  }
+
+  const set = toRecommendationSet(found.selection, ctx.language);
+  if (found.status === 'type_only') {
+    set.shortfall_note = typeOnlyNote(request, found.types, ctx.language);
+  }
+
+  ctx.session.last_recommendations = set.items.map((i) => i.product_id);
+  logEvent('recommendation_shown', ctx.session.session_id, {
+    product_ids: ctx.session.last_recommendations,
+    source: 'find_products',
+    status: found.status,
+    types: found.types,
+    shortfall: found.selection.shortfall,
+  });
+
+  return {
+    result: JSON.stringify({
+      count: set.items.length,
+      status: found.status,
+      requested_types: typeNames,
+      matching_need: found.matching_need,
+      items: set.items.map((i) => ({
+        product_id: i.product_id,
+        label: i.label,
+        name: i.name,
+        best_for: i.best_for,
+        why_it_suits_you: i.why_it_suits_you,
+      })),
+      note:
+        found.status === 'type_only'
+          ? 'None of these is specifically labelled for the stated need — they are the same type of product only. Say that honestly in one sentence (the cards also show a note). The cards are already shown; do not retype names, prices or details.'
+          : 'Every product shown is of the requested type and matches the stated need. The cards are already shown; introduce them in a sentence, do not retype names, prices or details.',
+    }),
+    recommendations: set,
+  };
+}
+
 function summarizeRejections(rejected: { reasons: string[] }[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const r of rejected) {
@@ -270,6 +389,8 @@ export async function executeTool(
       return runSubmitAnswer(args as { question_key?: string; answer_value?: string }, ctx);
     case 'get_recommendations':
       return runGetRecommendations(args as { category?: string; must_exclude_product_ids?: number[] }, ctx);
+    case 'find_products':
+      return runFindProducts(args as unknown as FindRequest & { must_exclude_product_ids?: number[] }, ctx);
     case 'search_products':
       return runSearchProducts(args as { query?: string }, ctx);
     default:

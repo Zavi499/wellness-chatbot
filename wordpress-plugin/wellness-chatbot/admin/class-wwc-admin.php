@@ -20,6 +20,7 @@ class WWC_Admin {
 		WWC_Admin_Analytics::init();
 		WWC_Admin_Settings::init();
 		WWC_Admin_History::init();
+		WWC_Admin_Accuracy::init();
 	}
 
 	public static function register_menu() {
@@ -37,6 +38,7 @@ class WWC_Admin {
 
 		$pages = array(
 			array( self::MENU_SLUG, __( 'Label Review Queue', 'wellness-chatbot' ), array( 'WWC_Admin_Labels', 'render' ) ),
+			array( self::MENU_SLUG . '-accuracy', __( 'Recommendation Accuracy', 'wellness-chatbot' ), array( 'WWC_Admin_Accuracy', 'render' ) ),
 			array( self::MENU_SLUG . '-kb', __( 'Knowledge Base', 'wellness-chatbot' ), array( 'WWC_Admin_Kb', 'render' ) ),
 			array( self::MENU_SLUG . '-analytics', __( 'Analytics', 'wellness-chatbot' ), array( 'WWC_Admin_Analytics', 'render' ) ),
 			array( self::MENU_SLUG . '-settings', __( 'Settings', 'wellness-chatbot' ), array( 'WWC_Admin_Settings', 'render' ) ),
@@ -153,6 +155,9 @@ class WWC_Admin {
 			'reset'               => array( 'success', __( 'Unreviewed AI drafts cleared. Verified and partial products were left untouched.', 'wellness-chatbot' ) ),
 			'reset_all'           => array( 'success', __( 'All AI labels cleared. The catalogue is back to never-labeled — use "Run AI labeling now" to relabel it.', 'wellness-chatbot' ) ),
 			'queue_flushed'       => array( 'success', __( 'Queued products pushed to the backend. If any are still shown as queued, check the backend connection.', 'wellness-chatbot' ) ),
+			'categories_saved'    => array( 'success', __( 'Category mapping saved. Relabel products for type changes to reach them.', 'wellness-chatbot' ) ),
+			'categories_suggested' => array( 'success', __( 'AI suggestions added. Review them below, then save.', 'wellness-chatbot' ) ),
+			'type_saved'          => array( 'success', __( 'Product type confirmed. The product is recommendable again.', 'wellness-chatbot' ) ),
 			'failed'              => array( 'error', __( 'That did not work. Check the backend connection and try again.', 'wellness-chatbot' ) ),
 		);
 

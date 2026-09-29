@@ -7,6 +7,7 @@
  * model invents a value (spec §3.3 step 2, §13).
  */
 import type { ProductCategory } from '../products/category.js';
+import { APPLICATIONS, PRODUCT_TYPE_KEYS, type ProductApplication, type ProductType } from '../products/types.js';
 
 type JsonSchema = Record<string, unknown>;
 
@@ -35,6 +36,18 @@ const bilingualText = (description: string): JsonSchema => ({
 /** Fields every category shares. */
 function baseProperties(): Record<string, JsonSchema> {
   return {
+    product_type: {
+      type: 'string',
+      enum: PRODUCT_TYPE_KEYS,
+      description:
+        'What the product physically IS, chosen from the fixed list. The single most important field — every recommendation is filtered on it.',
+    },
+    application: {
+      type: 'string',
+      enum: APPLICATIONS,
+      description:
+        'Where it is used: hair_scalp, face, body, oral_ingested (swallowed: tablets, capsules, syrups, sachets), or other.',
+    },
     name_ar: {
       type: ['string', 'null'],
       description:
@@ -196,6 +209,8 @@ export const LABEL_SCHEMAS: Record<ProductCategory, JsonSchema> = {
 
 /** The shape the model returns, before validation. */
 export interface LabelDraft {
+  product_type?: ProductType;
+  application?: ProductApplication;
   name_ar?: string | null;
   concern_primary?: { en: string[]; ar: string[] };
   concern_secondary?: { en: string[]; ar: string[] };

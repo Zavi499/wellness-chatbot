@@ -36,6 +36,7 @@ class WWC_Product_Payload {
 		$name_ar        = null;
 		$description_ar = null;
 		$short_ar       = null;
+		$how_to_use_ar  = null;
 		$ar_id          = WWC_Wpml::translation_id( $canonical_id, 'ar' );
 		if ( $ar_id ) {
 			$ar_product = wc_get_product( $ar_id );
@@ -43,10 +44,11 @@ class WWC_Product_Payload {
 				$name_ar        = $ar_product->get_name();
 				$description_ar = (string) $ar_product->get_description();
 				$short_ar       = (string) $ar_product->get_short_description();
+				$how_to_use_ar  = WWC_Product_Fields::read( $ar_id, 'how_to_use' );
 			}
 		}
 
-		return array(
+		$payload = array(
 			'id'                   => $canonical_id,
 			'name'                 => $product->get_name(),
 			'name_ar'              => $name_ar,
@@ -64,11 +66,75 @@ class WWC_Product_Payload {
 			'stock_status'         => $product->get_stock_status(),
 			'average_rating'       => (string) $product->get_average_rating(),
 			'rating_count'         => (int) $product->get_rating_count(),
-			'categories'           => self::terms( $product, 'product_cat' ),
+			'categories'           => self::categories( $product ),
 			'tags'                 => self::terms( $product, 'product_tag' ),
 			'images'               => self::images( $product ),
 			'attributes'           => self::attributes( $product ),
 		);
+
+		// The store's own Ingredients / How-to-use fields. A key is only sent
+		// when a field is configured: the backend treats "sent but empty" as
+		// "clear it", and "absent" as "leave what you have".
+		$ingredients = WWC_Product_Fields::read( $canonical_id, 'ingredients' );
+		if ( null !== $ingredients ) {
+			$payload['ingredients'] = $ingredients;
+		}
+		$how_to_use = WWC_Product_Fields::read( $canonical_id, 'how_to_use' );
+		if ( null !== $how_to_use ) {
+			$payload['how_to_use'] = $how_to_use;
+			// WPML often copies a custom field to the translation unchanged;
+			// an "Arabic" value identical to the English one is not a translation.
+			$payload['how_to_use_ar'] = ( null !== $how_to_use_ar && $how_to_use_ar !== $how_to_use ) ? $how_to_use_ar : '';
+		}
+
+		return $payload;
+	}
+
+	/**
+	 * Product categories with their parent and full path ("Hair Care >
+	 * Shampoo"), so the backend can map categories to shelves and tell a
+	 * specific sub-category from its broad parent.
+	 *
+	 * @param WC_Product $product Product.
+	 * @return array<int,array{id:int,name:string,slug:string,parent:int,path:string}>
+	 */
+	private static function categories( WC_Product $product ) {
+		$terms = get_the_terms( $product->get_id(), 'product_cat' );
+		if ( ! is_array( $terms ) ) {
+			return array();
+		}
+		$out = array();
+		foreach ( $terms as $term ) {
+			$out[] = array(
+				'id'     => (int) $term->term_id,
+				'name'   => $term->name,
+				'slug'   => $term->slug,
+				'parent' => (int) $term->parent,
+				'path'   => self::term_path( $term ),
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * @param WP_Term $term Category term.
+	 * @return string
+	 */
+	private static function term_path( $term ) {
+		static $cache = array();
+		if ( isset( $cache[ $term->term_id ] ) ) {
+			return $cache[ $term->term_id ];
+		}
+		$names = array();
+		foreach ( array_reverse( get_ancestors( $term->term_id, 'product_cat', 'taxonomy' ) ) as $ancestor_id ) {
+			$ancestor = get_term( $ancestor_id, 'product_cat' );
+			if ( $ancestor instanceof WP_Term ) {
+				$names[] = $ancestor->name;
+			}
+		}
+		$names[]                    = $term->name;
+		$cache[ $term->term_id ] = implode( ' > ', $names );
+		return $cache[ $term->term_id ];
 	}
 
 	/**

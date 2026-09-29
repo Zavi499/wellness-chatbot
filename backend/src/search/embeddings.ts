@@ -9,7 +9,8 @@ import { db } from '../db/index.js';
 import { openai, models } from '../openai/client.js';
 import { config } from '../config.js';
 import { allProducts, getProducts } from '../products/repository.js';
-import { expandQuery, keywordScore } from './normalize.js';
+import { contentTokens, expandQuery, keywordScore } from './normalize.js';
+import { typeLabel } from '../products/types.js';
 import { searchVectors, upsertVector, type VectorHit } from './vector.js';
 import type { KbEntry, Product } from '../types.js';
 
@@ -19,7 +20,8 @@ export function productEmbeddingText(p: Product): string {
     p.name,
     p.name_ar,
     p.brand,
-    p.categories.join(', '),
+    p.product_type ? `${typeLabel(p.product_type, 'en')} / ${typeLabel(p.product_type, 'ar')}` : null,
+    (p.category_paths.length ? p.category_paths : p.categories).join(', '),
     p.tags.join(', '),
     p.concern_primary.en.join(', '),
     p.concern_primary.ar.join(', '),
@@ -32,6 +34,11 @@ export function productEmbeddingText(p: Product): string {
     p.synonyms_en.join(', '),
     p.synonyms_ar.join(', '),
     p.short_description,
+    // The long fields last, so the 4000-char cap trims them rather than the
+    // name, type and labels above.
+    p.how_to_use_source.en,
+    p.description,
+    p.full_ingredients,
   ];
   return parts.filter(Boolean).join('\n').slice(0, 4000);
 }
@@ -138,30 +145,47 @@ export async function searchProducts(query: string, limit = 8): Promise<ProductS
 
   const candidateIds = new Set(vectorHits.map((h) => h.ref_id));
 
-  // Always fold in a keyword pass so an exact brand match cannot be missed.
-  const keywordRows = db()
-    .prepare(
-      `SELECT product_id FROM products
-       WHERE lower(name) LIKE ? OR lower(COALESCE(brand,'')) LIKE ? OR lower(COALESCE(sku,'')) LIKE ?
-       LIMIT 50`,
-    )
-    .all(`%${expanded.normalized}%`, `%${expanded.normalized}%`, `%${expanded.normalized}%`) as Record<
-    string,
-    unknown
-  >[];
-  for (const row of keywordRows) candidateIds.add(Number(row.product_id));
+  // Always fold in a keyword pass so an exact brand or product name cannot
+  // be missed. Per word, not the whole sentence: matching "do you have
+  // cerave cream" as one substring meant this pass effectively never fired.
+  const tokens = contentTokens(expanded.normalized).slice(0, 5);
+  if (tokens.length) {
+    const clauses = tokens.map(
+      () => `(lower(name) LIKE ? OR lower(COALESCE(name_ar,'')) LIKE ? OR lower(COALESCE(brand,'')) LIKE ? OR lower(COALESCE(sku,'')) LIKE ?)`,
+    );
+    const params = tokens.flatMap((t) => [`%${t}%`, `%${t}%`, `%${t}%`, `%${t}%`]);
+    const keywordRows = db()
+      .prepare(`SELECT product_id FROM products WHERE ${clauses.join(' OR ')} LIMIT 80`)
+      .all(...params) as Record<string, unknown>[];
+    for (const row of keywordRows) candidateIds.add(Number(row.product_id));
+  }
 
   const products = getProducts([...candidateIds]);
   const semanticById = new Map(vectorHits.map((h) => [h.ref_id, h.similarity]));
 
-  const hits: ProductSearchHit[] = products.map((product) => {
-    const semantic = semanticById.get(product.product_id) ?? 0;
-    const keyword = keywordScore(expanded, productEmbeddingText(product));
-    // Weighted so a strong exact-name match beats a merely similar vector.
-    const score = semantic * 0.6 + keyword * 0.4;
-    return { product, score, semantic, keyword };
-  });
+  const hits: ProductSearchHit[] = products
+    .map((product) => {
+      const semantic = semanticById.get(product.product_id) ?? 0;
+      // Scored against what the customer can see — name, brand, type — so a
+      // word buried in a long description can't make a product "match".
+      const keyword = keywordScore(
+        expanded,
+        [product.name, product.name_ar, product.brand, product.sku, product.product_type?.replace(/_/g, ' ')]
+          .filter(Boolean)
+          .join(' '),
+      );
+      // Weighted so a strong exact-name match beats a merely similar vector.
+      const score = semantic * 0.5 + keyword * 0.5;
+      return { product, score, semantic, keyword };
+    })
+    // A product the customer named shares a word with the query; one that
+    // doesn't must at least be semantically close. Without a floor, the top
+    // six vectors came back whatever they were.
+    .filter((h) => h.keyword > 0 || h.semantic >= MIN_SEMANTIC_ONLY);
 
   hits.sort((a, b) => b.score - a.score);
   return hits.slice(0, limit);
 }
+
+/** Cosine similarity a result needs when no query word appears in its name. */
+const MIN_SEMANTIC_ONLY = 0.45;

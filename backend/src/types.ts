@@ -4,6 +4,8 @@
  * service all speak the same shapes.
  */
 
+import type { ProductApplication, ProductType } from './products/types.js';
+
 export type Language = 'en' | 'ar';
 
 export type VerificationStatus =
@@ -52,6 +54,10 @@ export interface Product {
   description: string | null;
   description_ar: string | null;
   categories: string[];
+  /** "Hair Care > Shampoo" per assigned category, when the plugin sends parents. */
+  category_paths: string[];
+  /** WooCommerce term ids, parallel to `categories`; keys into `category_map`. */
+  woo_category_ids: number[];
   tags: string[];
   brand: string | null;
   price: number | null;
@@ -62,6 +68,13 @@ export interface Product {
   stock_status: 'instock' | 'outofstock' | 'onbackorder';
   rating_average: number | null;
   rating_count: number;
+
+  /**
+   * The store's own "How to use" custom field (ACF), verbatim. WooCommerce-
+   * owned like the description — distinct from `how_to_use`, which is the
+   * label shown on cards and is copied from this whenever it exists.
+   */
+  how_to_use_source: Bilingual;
 
   // --- _wwc_* extension schema (spec §3.2) ---------------------------------
   verification_status: VerificationStatus;
@@ -95,6 +108,19 @@ export interface Product {
   source_verification_note: string | null;
   synonyms_en: string[];
   synonyms_ar: string[];
+
+  /** What the product physically is. The hard filter for every recommendation. */
+  product_type: ProductType | null;
+  /** Where it is used; `oral_ingested` never satisfies a topical request. */
+  application: ProductApplication | null;
+  /** Who set `product_type`: the labelling model, a category rule, or an admin. */
+  product_type_source: 'ai' | 'category' | 'admin' | null;
+  /**
+   * Contradictions the labelling sanity check found (e.g. the name says
+   * "shampoo" but the type says otherwise). A product with any is held back
+   * from recommendations until an admin confirms its type.
+   */
+  label_issues: string[];
 
   updated_at: string;
 }
